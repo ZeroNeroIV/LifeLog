@@ -11,7 +11,10 @@
     "start:clear": "expo start --clear",
     "android:clear": "expo start --android --clear",
     "ios:clear": "expo start --ios --clear",
-    "web:clear": "expo start --web --clear"
+    "web:clear": "expo start --web --clear",
+    "android:release": "cd android && ./gradlew assembleRelease",
+    "android:debug": "cd android && ./gradlew assembleDebug",
+    "android:prebuild": "expo prebuild --platform android --clean"
   },
   "dependencies": {
     "expo": "~55.0.8",
