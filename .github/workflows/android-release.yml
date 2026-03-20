@@ -17,11 +17,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '21'
-          cache: 'npm'
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
 
       - name: Setup Java 21
         uses: actions/setup-java@v4
@@ -30,13 +27,13 @@ jobs:
           java-version: '21'
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
       - name: Prebuild Android
-        run: npx expo prebuild --platform android --clean
+        run: bunx expo prebuild --platform android --clean
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
