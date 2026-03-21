@@ -1,75 +1,154 @@
 import React, { useState, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
-import { View, Text, StyleSheet, ScrollView, Platform, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, Platform, StatusBar, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { GlassWater, Coffee, Smile } from 'lucide-react-native';
-import MetricBentoCard from '../src/components/MetricBentoCard';
-import BentoCard from '../src/components/BentoCard';
-import DrinksBentoCard from '../src/components/DrinksBentoCard';
-import MoodBentoCard from '../src/components/MoodBentoCard';
-import { getAllSettings } from '../src/db';
+import { MessageSquare, List, Plus } from 'lucide-react-native';
 import { useTheme } from '../src/theme';
+import ModelDownloadCard from '../src/components/ModelDownloadCard';
+import NutritionChat from '../src/components/NutritionChat';
+import MealHistoryCard from '../src/components/MealHistoryCard';
+import ManualFoodEntry from '../src/components/ManualFoodEntry';
+import QuickFoodButtons from '../src/components/QuickFoodButtons';
+import FoodReportModal from '../src/components/FoodReportModal';
+import { getTodayNutritionTotals, getAllSettings } from '../src/db';
 
-export default function LogScreen() {
+export default function NutritionScreen() {
   const { colors } = useTheme();
   const s = getStyles(colors);
-  const [settings, setSettings] = useState(null);
+  const [modelReady, setModelReady] = useState(false);
+  const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'history'
+  const [showManualEntry, setShowManualEntry] = useState(false);
+  const [showFoodReport, setShowFoodReport] = useState(false);
+  const [reportFoodName, setReportFoodName] = useState('');
+  const [todayTotals, setTodayTotals] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 });
+  const [goals, setGoals] = useState({ calories: 2000, protein: 50, carbs: 250, fat: 65, fiber: 30 });
 
   useFocusEffect(
     useCallback(() => {
-      loadSettings();
+      loadData();
     }, [])
   );
 
-  const loadSettings = async () => {
-    const s = await getAllSettings();
-    setSettings(s);
+  const loadData = async () => {
+    const [totals, settings] = await Promise.all([getTodayNutritionTotals(), getAllSettings()]);
+    setTodayTotals(totals);
+    setGoals({
+      calories: parseInt(settings.nutrition_calorie_goal) || 2000,
+      protein: parseInt(settings.nutrition_protein_goal) || 50,
+      carbs: parseInt(settings.nutrition_carbs_goal) || 250,
+      fat: parseInt(settings.nutrition_fat_goal) || 65,
+      fiber: parseInt(settings.nutrition_fiber_goal) || 30,
+    });
   };
 
-  if (!settings) return null;
+  const MacroBar = ({ label, value, goal, color }) => {
+    const pct = Math.min((value / goal) * 100, 100);
+    return (
+      <View style={s.macroItem}>
+        <View style={s.macroHeader}>
+          <Text style={s.macroLabel}>{label}</Text>
+          <Text style={s.macroValue}>{Math.round(value)}/{goal}</Text>
+        </View>
+        <View style={s.macroBarBg}>
+          <View style={[s.macroBar, { width: `${pct}%`, backgroundColor: color }]} />
+        </View>
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={s.safe}>
       <StatusBar barStyle="light-content" backgroundColor={colors.background} />
       
       <View style={s.topBar}>
-        <Text style={s.appTitle}>QUICK LOG</Text>
+        <Text style={s.appTitle}>NUTRITION</Text>
       </View>
 
-      <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
-        
-        <View style={s.header}>
-          <Text style={s.greeting}>What's the vibe?</Text>
-          <Text style={s.date}>Select a category to log</Text>
+      {/* Today's Summary */}
+      <View style={s.summaryCard}>
+        <View style={s.calorieRow}>
+          <Text style={s.calorieValue}>{Math.round(todayTotals.calories)}</Text>
+          <Text style={s.calorieLabel}>/ {goals.calories} cal</Text>
         </View>
+        <View style={s.macrosRow}>
+          <MacroBar label="Protein" value={todayTotals.protein} goal={goals.protein} color="#22c55e" />
+          <MacroBar label="Carbs" value={todayTotals.carbs} goal={goals.carbs} color="#f59e0b" />
+          <MacroBar label="Fat" value={todayTotals.fat} goal={goals.fat} color="#ef4444" />
+        </View>
+      </View>
 
-        <MetricBentoCard
-          title="Hydration"
-          type="water"
-          unit="ml"
-          icon={GlassWater}
-          color="#7de9ff"
-          fav1={settings.water_fav1_ml || '250'}
-          fav2={settings.water_fav2_ml || '500'}
-        />
+      {/* Tab Switcher */}
+      <View style={s.tabBar}>
+        <TouchableOpacity style={[s.tab, activeTab === 'chat' && s.tabActive]} onPress={() => setActiveTab('chat')}>
+          <MessageSquare size={16} color={activeTab === 'chat' ? colors.primary : colors.textDim} />
+          <Text style={[s.tabText, activeTab === 'chat' && s.tabTextActive]}>Chat</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={[s.tab, activeTab === 'history' && s.tabActive]} onPress={() => setActiveTab('history')}>
+          <List size={16} color={activeTab === 'history' ? colors.primary : colors.textDim} />
+          <Text style={[s.tabText, activeTab === 'history' && s.tabTextActive]}>History</Text>
+        </TouchableOpacity>
+      </View>
 
-        <DrinksBentoCard />
+      {/* Model Download (collapsed when ready) */}
+      {!modelReady && activeTab === 'chat' && <View style={s.downloadSection}><ModelDownloadCard onModelReady={setModelReady} /></View>}
 
-        <MoodBentoCard />
+      {/* Content */}
+      {activeTab === 'chat' ? (
+        <View style={s.chatSection}>
+          <NutritionChat modelReady={modelReady} />
+        </View>
+      ) : (
+        <ScrollView style={s.historySection} contentContainerStyle={{ paddingBottom: 100 }}>
+          <QuickFoodButtons onFoodAdded={loadData} />
+          <MealHistoryCard onUpdate={loadData} />
+        </ScrollView>
+      )}
 
-      </ScrollView>
+      {/* Manual Entry FAB */}
+      <TouchableOpacity style={s.fab} onPress={() => setShowManualEntry(true)}>
+        <Plus size={24} color={colors.primaryText} />
+      </TouchableOpacity>
+
+      {/* Manual Food Entry Modal */}
+      <ManualFoodEntry 
+        visible={showManualEntry} 
+        onClose={() => setShowManualEntry(false)} 
+        onFoodAdded={loadData}
+        onReportFood={(name) => { setReportFoodName(name); setShowFoodReport(true); }}
+      />
+
+      {/* Food Report Modal */}
+      <FoodReportModal
+        visible={showFoodReport}
+        onClose={() => { setShowFoodReport(false); setReportFoodName(''); }}
+        initialName={reportFoodName}
+      />
     </SafeAreaView>
   );
 }
 
 const getStyles = (colors) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background, paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 },
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 64, borderBottomWidth: 1, borderBottomColor: colors.surfaceBorder, backgroundColor: colors.topBar },
-  appTitle: { color: colors.text, fontSize: 16, fontWeight: '800', letterSpacing: 2 },
-  scroll: { padding: 24, paddingBottom: 100 },
-  header: { marginBottom: 32 },
-  greeting: { fontSize: 32, fontWeight: '800', color: colors.text, letterSpacing: -1 },
-  date: { fontSize: 14, color: colors.textDim, marginTop: 6, fontWeight: '800' },
-  placeholderBox: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 24, backgroundColor: colors.surfaceInput, borderRadius: 16, marginTop: 8 },
-  placeholderText: { fontSize: 12, fontWeight: '800', letterSpacing: 2 }
+  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 56, borderBottomWidth: 1, borderBottomColor: colors.surfaceBorder, backgroundColor: colors.topBar },
+  appTitle: { color: colors.text, fontSize: 14, fontWeight: '800', letterSpacing: 2 },
+  summaryCard: { backgroundColor: colors.surface, margin: 12, marginBottom: 0, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: colors.surfaceBorder },
+  calorieRow: { flexDirection: 'row', alignItems: 'baseline', marginBottom: 12 },
+  calorieValue: { fontSize: 36, fontWeight: '800', color: colors.primary },
+  calorieLabel: { fontSize: 14, color: colors.textMuted, marginLeft: 4 },
+  macrosRow: { flexDirection: 'row', gap: 12 },
+  macroItem: { flex: 1 },
+  macroHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
+  macroLabel: { fontSize: 11, fontWeight: '700', color: colors.textMuted, letterSpacing: 0.5 },
+  macroValue: { fontSize: 11, color: colors.textDim },
+  macroBarBg: { height: 6, backgroundColor: colors.surfaceInput, borderRadius: 3, overflow: 'hidden' },
+  macroBar: { height: '100%', borderRadius: 3 },
+  tabBar: { flexDirection: 'row', marginHorizontal: 12, marginTop: 8, backgroundColor: colors.surface, borderRadius: 12, padding: 4, borderWidth: 1, borderColor: colors.surfaceBorder },
+  tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 8 },
+  tabActive: { backgroundColor: colors.primaryBg },
+  tabText: { fontSize: 13, fontWeight: '600', color: colors.textDim },
+  tabTextActive: { color: colors.primary },
+  downloadSection: { paddingHorizontal: 12, paddingTop: 12 },
+  chatSection: { flex: 1, marginTop: 8 },
+  historySection: { flex: 1, marginTop: 8 },
+  fab: { position: 'absolute', right: 20, bottom: 100, width: 56, height: 56, borderRadius: 28, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4 },
 });

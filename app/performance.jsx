@@ -3,6 +3,7 @@ import { useFocusEffect } from 'expo-router';
 import { View, Text, StyleSheet, ScrollView, Platform, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MetricsChart from '../src/components/MetricsChart';
+import NutritionChart from '../src/components/NutritionChart';
 import { useTheme } from '../src/theme';
 
 export default function PerformanceScreen() {
@@ -30,6 +31,8 @@ export default function PerformanceScreen() {
           <Text style={s.greeting}>Your Performance</Text>
           <Text style={s.date}>Activity Overview</Text>
         </View>
+
+        <NutritionChart refreshKey={refreshKey} />
 
         <MetricsChart 
           title="Hydration Trends"

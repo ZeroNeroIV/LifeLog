@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Platform, StatusBar, TouchableOpacity, ScrollView, TextInput, Alert, KeyboardAvoidingView, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Bell, Droplets, Trash2, Save, AlertOctagon, Sun, Moon, User } from 'lucide-react-native';
+import { Bell, Droplets, Trash2, Save, AlertOctagon, Sun, Moon, User, Apple } from 'lucide-react-native';
 import BentoCard from '../src/components/BentoCard';
 import { forceTestMoodCheck, scheduleNextMoodUnlockNotification } from '../src/notifications';
 import { getAllSettings, updateSetting, clearAllLogs } from '../src/db';
@@ -14,7 +14,9 @@ export default function SettingsScreen() {
   
   const [settings, setSettings] = useState({ 
     water_fav1_ml: '250', water_fav2_ml: '500',
-    profile_fullname: '', profile_username: '', profile_email: ''
+    profile_fullname: '', profile_username: '', profile_email: '',
+    nutrition_calorie_goal: '2000', nutrition_protein_goal: '50',
+    nutrition_carbs_goal: '250', nutrition_fat_goal: '65', nutrition_fiber_goal: '30'
   });
 
   useEffect(() => {
@@ -33,6 +35,11 @@ export default function SettingsScreen() {
     await updateSetting('profile_fullname', settings.profile_fullname || '');
     await updateSetting('profile_username', settings.profile_username || '');
     await updateSetting('profile_email', settings.profile_email || '');
+    await updateSetting('nutrition_calorie_goal', settings.nutrition_calorie_goal || '2000');
+    await updateSetting('nutrition_protein_goal', settings.nutrition_protein_goal || '50');
+    await updateSetting('nutrition_carbs_goal', settings.nutrition_carbs_goal || '250');
+    await updateSetting('nutrition_fat_goal', settings.nutrition_fat_goal || '65');
+    await updateSetting('nutrition_fiber_goal', settings.nutrition_fiber_goal || '30');
     Alert.alert("Saved", "Settings have been updated!");
   };
 
@@ -116,6 +123,38 @@ export default function SettingsScreen() {
             </View>
           </BentoCard>
 
+          <BentoCard title="Nutrition Goals" subtitle="Daily Targets" icon={Apple} color="#22c55e" style={{marginBottom: 16}}>
+              <View style={s.menuBox}>
+                  <View style={s.row}>
+                    <View style={s.halfInput}>
+                      <Text style={s.label}>Calories</Text>
+                      <TextInput style={s.input} keyboardType="numeric" value={settings.nutrition_calorie_goal} onChangeText={(t) => setSettings({...settings, nutrition_calorie_goal: t})} />
+                    </View>
+                    <View style={s.halfInput}>
+                      <Text style={s.label}>Protein (g)</Text>
+                      <TextInput style={s.input} keyboardType="numeric" value={settings.nutrition_protein_goal} onChangeText={(t) => setSettings({...settings, nutrition_protein_goal: t})} />
+                    </View>
+                  </View>
+                  <View style={s.row}>
+                    <View style={s.halfInput}>
+                      <Text style={s.label}>Carbs (g)</Text>
+                      <TextInput style={s.input} keyboardType="numeric" value={settings.nutrition_carbs_goal} onChangeText={(t) => setSettings({...settings, nutrition_carbs_goal: t})} />
+                    </View>
+                    <View style={s.halfInput}>
+                      <Text style={s.label}>Fat (g)</Text>
+                      <TextInput style={s.input} keyboardType="numeric" value={settings.nutrition_fat_goal} onChangeText={(t) => setSettings({...settings, nutrition_fat_goal: t})} />
+                    </View>
+                  </View>
+                  <Text style={s.label}>Fiber (g)</Text>
+                  <TextInput style={s.input} keyboardType="numeric" value={settings.nutrition_fiber_goal} onChangeText={(t) => setSettings({...settings, nutrition_fiber_goal: t})} />
+
+                  <TouchableOpacity style={s.saveBtn} onPress={saveSettings}>
+                    <Save size={18} color={colors.primaryText} style={{ marginRight: 8 }} />
+                    <Text style={s.saveBtnText}>Save Goals</Text>
+                  </TouchableOpacity>
+              </View>
+          </BentoCard>
+
           <BentoCard title="Preferences" subtitle="Quick Logs" icon={Droplets} color={colors.primary} style={{marginBottom: 16}}>
               <View style={s.menuBox}>
                   <Text style={s.label}>Water Auto-Add 1 (mL)</Text>
@@ -181,6 +220,8 @@ const getStyles = (colors) => StyleSheet.create({
   
   label: { color: colors.textDim, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', marginBottom: 8, letterSpacing: 1 },
   input: { backgroundColor: colors.surfaceInput, color: colors.text, borderWidth: 1, borderColor: colors.surfaceBorder, borderRadius: 12, padding: 16, fontSize: 16, marginBottom: 16 },
+  row: { flexDirection: 'row', gap: 12 },
+  halfInput: { flex: 1 },
   
   saveBtn: { flexDirection: 'row', backgroundColor: colors.primary, padding: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginTop: 8 },
   saveBtnText: { color: colors.primaryText, fontWeight: '800', fontSize: 14 },

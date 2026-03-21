@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Stack, Tabs } from 'expo-router';
-import { Home, PlusCircle, Activity, Timer, Settings, Monitor } from 'lucide-react-native';
+import { Home, UtensilsCrossed, Activity, Timer, Settings, Monitor } from 'lucide-react-native';
 import { StatusBar } from 'expo-status-bar';
 import { View, Text, StyleSheet } from 'react-native';
 import { initializeDB, addLog } from '../src/db';
@@ -37,7 +37,7 @@ function MainTabs() {
         />
         <Tabs.Screen
           name="log"
-          options={{ title: 'Log', tabBarIcon: ({ color }) => <PlusCircle color={color} size={24} /> }}
+          options={{ title: 'Nutrition', tabBarIcon: ({ color }) => <UtensilsCrossed color={color} size={24} /> }}
         />
         <Tabs.Screen
           name="focus"
