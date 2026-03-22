@@ -17,9 +17,29 @@ export default function PomodoroTimer({ onSessionComplete }) {
   const { colors } = useTheme();
   const s = getStyles(colors);
 
-  // Audio players - loaded on mount to avoid re-render issues
-  const workPlayer = useAudioPlayer('https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg', { updateInterval: 0 });
-  const breakPlayer = useAudioPlayer('https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg', { updateInterval: 0 });
+  // Audio players - use null initially to avoid blocking
+  const workPlayer = useAudioPlayer(null, { updateInterval: 0 });
+  const breakPlayer = useAudioPlayer(null, { updateInterval: 0 });
+  const [audioReady, setAudioReady] = useState(false);
+
+  // Load audio asynchronously without blocking UI
+  useEffect(() => {
+    const loadAudio = async () => {
+      try {
+        if (workPlayer && breakPlayer) {
+          workPlayer.replace('https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg');
+          breakPlayer.replace('https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg');
+          setAudioReady(true);
+        }
+      } catch (e) {
+        console.log('[Audio] Failed to load audio:', e);
+      }
+    };
+    
+    // Delay audio loading to not block initial render
+    const timeout = setTimeout(loadAudio, 500);
+    return () => clearTimeout(timeout);
+  }, [workPlayer, breakPlayer]);
 
   const [mode, setMode] = useState('work'); 
   const [cycle, setCycle] = useState(1);
@@ -93,11 +113,13 @@ export default function PomodoroTimer({ onSessionComplete }) {
     clearPomodoroNotification();
 
     if (mode === 'work') {
-      try {
-        await workPlayer.seekTo(0);
-        await workPlayer.play();
-      } catch (e) {
-        console.log('[Audio] Error playing work sound:', e);
+      if (audioReady) {
+        try {
+          await workPlayer.seekTo(0);
+          await workPlayer.play();
+        } catch (e) {
+          console.log('[Audio] Error playing work sound:', e);
+        }
       }
       await addLog('focus', activeProfile.work);
       if (onSessionComplete) onSessionComplete();
@@ -110,11 +132,13 @@ export default function PomodoroTimer({ onSessionComplete }) {
         setTimeLeft(Math.round(activeProfile.shortBreak * 60));
       }
     } else {
-      try {
-        await breakPlayer.seekTo(0);
-        await breakPlayer.play();
-      } catch (e) {
-        console.log('[Audio] Error playing break sound:', e);
+      if (audioReady) {
+        try {
+          await breakPlayer.seekTo(0);
+          await breakPlayer.play();
+        } catch (e) {
+          console.log('[Audio] Error playing break sound:', e);
+        }
       }
       if (mode === 'longBreak') {
          setCycle(1);

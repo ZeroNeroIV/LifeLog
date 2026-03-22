@@ -85,10 +85,10 @@ export default function SettingsScreen() {
             try {
               const db = await getDB();
               await db.withTransactionAsync(async () => {
-                await db.runAsync("DELETE FROM foods;");
+                await db.runAsync("DELETE FROM meal_foods;");
                 await db.runAsync("DELETE FROM meals;");
-                await db.runAsync("DELETE FROM nutrition;");
-                await db.runAsync("DELETE FROM sqlite_sequence WHERE name IN ('meals', 'foods', 'nutrition');");
+                await db.runAsync("DELETE FROM food_reports;");
+                await db.runAsync("DELETE FROM sqlite_sequence WHERE name IN ('meals', 'meal_foods', 'food_reports');");
               });
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               Alert.alert("✓ Cleared", "All meals and nutrition data have been deleted.");
@@ -115,9 +115,9 @@ export default function SettingsScreen() {
             try {
               const db = await getDB();
               await db.withTransactionAsync(async () => {
-                await db.runAsync("DELETE FROM conversation_messages;");
-                await db.runAsync("DELETE FROM conversations;");
-                await db.runAsync("DELETE FROM sqlite_sequence WHERE name IN ('conversations', 'conversation_messages');");
+                await db.runAsync("DELETE FROM ai_messages;");
+                await db.runAsync("DELETE FROM ai_conversations;");
+                await db.runAsync("DELETE FROM sqlite_sequence WHERE name IN ('ai_conversations', 'ai_messages');");
               });
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               Alert.alert("✓ Cleared", "All chat history has been deleted.");
