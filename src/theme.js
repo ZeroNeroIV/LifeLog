@@ -13,6 +13,7 @@ export const THEMES = {
     textDim: '#767575',
     tabBar: 'rgba(31, 32, 32, 0.95)',
     topBar: 'rgba(14,14,14,0.8)',
+    statusBar: '#0e0e0e',  // Dark background for status bar
     primary: '#7de9ff',
     primaryBg: '#7de9ff20',
     primaryText: '#00363e',
@@ -39,7 +40,8 @@ export const THEMES = {
     textMuted: '#64748b',
     textDim: '#94a3b8',
     tabBar: 'rgba(255, 255, 255, 0.95)',
-    topBar: 'rgba(248, 250, 252, 0.8)',
+    topBar: '#e2e8f0',  // Solid grey shade for light mode
+    statusBar: '#cbd5e1',  // Slightly darker grey for status bar background
     primary: '#0284c7',
     primaryBg: '#e0f2fe',
     primaryText: '#082f49',

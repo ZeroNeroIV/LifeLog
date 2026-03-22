@@ -5,6 +5,7 @@ import { Bell, Droplets, Trash2, Save, AlertOctagon, Sun, Moon, User, Apple, Tim
 import BentoCard from '../src/components/BentoCard';
 import { forceTestMoodCheck, scheduleNextMoodUnlockNotification } from '../src/notifications';
 import { getAllSettings, updateSetting, clearAllLogs } from '../src/db';
+import { getDB } from '../src/db';
 import * as Haptics from 'expo-haptics';
 import { useTheme } from '../src/theme';
 
@@ -45,20 +46,108 @@ export default function SettingsScreen() {
     Alert.alert("Saved", "Settings have been updated!");
   };
 
-  const handleClearData = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+  const handleClearMetrics = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     Alert.alert(
-      "Clear All Data",
-      "Are you sure you want to permanently delete ALL your logs? This cannot be undone.",
+      "Clear Metrics",
+      "Delete all water, caffeine, mood, focus, vitamin C, and sugar logs?\n\nMeals and nutrition data will be preserved.",
       [
         { text: "Cancel", style: "cancel" },
         { 
-          text: "Delete All", 
+          text: "Clear Metrics", 
           style: "destructive", 
           onPress: async () => {
-            await clearAllLogs();
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            Alert.alert("Data Cleared", "All metric logs have been erased.");
+            try {
+              const db = await getDB();
+              await db.runAsync("DELETE FROM logs;");
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert("✓ Cleared", "All metric logs have been deleted.");
+            } catch (error) {
+              Alert.alert("Error", `Failed to clear metrics: ${error.message}`);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleClearMeals = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Alert.alert(
+      "Clear Meals & Nutrition",
+      "Delete all meals, food entries, and nutrition data?\n\nMetric logs will be preserved.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Clear Meals", 
+          style: "destructive", 
+          onPress: async () => {
+            try {
+              const db = await getDB();
+              await db.withTransactionAsync(async () => {
+                await db.runAsync("DELETE FROM foods;");
+                await db.runAsync("DELETE FROM meals;");
+                await db.runAsync("DELETE FROM nutrition;");
+                await db.runAsync("DELETE FROM sqlite_sequence WHERE name IN ('meals', 'foods', 'nutrition');");
+              });
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert("✓ Cleared", "All meals and nutrition data have been deleted.");
+            } catch (error) {
+              Alert.alert("Error", `Failed to clear meals: ${error.message}`);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleClearChat = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    Alert.alert(
+      "Clear Chat History",
+      "Delete all AI chat conversation history?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Clear Chat", 
+          style: "destructive", 
+          onPress: async () => {
+            try {
+              const db = await getDB();
+              await db.withTransactionAsync(async () => {
+                await db.runAsync("DELETE FROM conversation_messages;");
+                await db.runAsync("DELETE FROM conversations;");
+                await db.runAsync("DELETE FROM sqlite_sequence WHERE name IN ('conversations', 'conversation_messages');");
+              });
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert("✓ Cleared", "All chat history has been deleted.");
+            } catch (error) {
+              Alert.alert("Error", `Failed to clear chat: ${error.message}`);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  const handleClearData = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    Alert.alert(
+      "⚠️ Clear All Data",
+      "This will permanently delete:\n\n• All metric logs (water, caffeine, mood, focus, vitamins, sugar)\n• All meals and food entries\n• All nutrition data\n• All chat conversation history\n\nYour settings and preferences will be preserved.\n\nThis action CANNOT be undone!",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Delete Everything", 
+          style: "destructive", 
+          onPress: async () => {
+            try {
+              await clearAllLogs();
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              Alert.alert("✓ Data Cleared", "All your data has been permanently deleted. Your settings have been preserved.");
+            } catch (error) {
+              Alert.alert("Error", `Failed to clear data: ${error.message}`);
+            }
           }
         }
       ]
@@ -67,7 +156,7 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView style={s.safe}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.statusBar} />
       <View style={s.topBar}>
         <Text style={s.appTitle}>SETTINGS</Text>
       </View>
@@ -219,10 +308,28 @@ export default function SettingsScreen() {
 
           <BentoCard title="Danger Zone" subtitle="Data Management" icon={AlertOctagon} color={colors.danger}>
               <View style={s.menuBox}>
-                  <Text style={s.menuText}>Wipe your database clean forever.</Text>
+                  <Text style={s.menuText}>Selectively delete data or wipe everything. These actions cannot be undone!</Text>
+                  
+                  <TouchableOpacity style={s.btnWarning} onPress={handleClearMetrics}>
+                    <Trash2 size={16} color={colors.accent1} style={{ marginRight: 8 }} />
+                    <Text style={s.btnWarningText}>Clear Metrics Only</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity style={s.btnWarning} onPress={handleClearMeals}>
+                    <Trash2 size={16} color={colors.accent1} style={{ marginRight: 8 }} />
+                    <Text style={s.btnWarningText}>Clear Meals & Nutrition</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity style={s.btnWarning} onPress={handleClearChat}>
+                    <Trash2 size={16} color={colors.accent1} style={{ marginRight: 8 }} />
+                    <Text style={s.btnWarningText}>Clear Chat History</Text>
+                  </TouchableOpacity>
+
+                  <View style={{ height: 12 }} />
+
                   <TouchableOpacity style={s.btnDanger} onPress={handleClearData}>
                     <Trash2 size={18} color={colors.dangerText} style={{ marginRight: 8 }} />
-                    <Text style={s.btnDangerText}>Clear All Data</Text>
+                    <Text style={s.btnDangerText}>Clear ALL Data</Text>
                   </TouchableOpacity>
               </View>
           </BentoCard>
@@ -260,6 +367,9 @@ const getStyles = (colors) => StyleSheet.create({
 
   btnDanger: { flexDirection: 'row', backgroundColor: colors.danger, padding: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   btnDangerText: { color: colors.dangerText, fontWeight: '800', fontSize: 14 },
+
+  btnWarning: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.accent1Bg, paddingVertical: 12, borderRadius: 10, marginTop: 8, borderWidth: 1, borderColor: colors.accent1Border },
+  btnWarningText: { fontSize: 13, fontWeight: '700', color: colors.accent1, letterSpacing: 0.3 },
 
   profilesContainer: { marginTop: 8 },
   profileItem: { backgroundColor: colors.surfaceInput, padding: 12, borderRadius: 8, marginBottom: 8, borderWidth: 1, borderColor: colors.surfaceBorder },

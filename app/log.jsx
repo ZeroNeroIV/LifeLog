@@ -13,7 +13,7 @@ import FoodReportModal from '../src/components/FoodReportModal';
 import { getTodayNutritionTotals, getAllSettings } from '../src/db';
 
 export default function NutritionScreen() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const s = getStyles(colors);
   const [modelReady, setModelReady] = useState(false);
   const [activeTab, setActiveTab] = useState('chat');
@@ -58,7 +58,7 @@ export default function NutritionScreen() {
 
   return (
     <SafeAreaView style={s.safe}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.statusBar} />
       
       <View style={s.topBar}>
         <Text style={s.appTitle}>NUTRITION</Text>

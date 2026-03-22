@@ -6,11 +6,11 @@ import PomodoroTimer from '../src/components/PomodoroTimer';
 import { useTheme } from '../src/theme';
 
 export default function FocusScreen() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const s = getStyles(colors);
   return (
     <SafeAreaView style={s.safe}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.statusBar} />
       
       <View style={s.topBar}>
         <Text style={s.appTitle}>FOCUS</Text>

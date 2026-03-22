@@ -16,7 +16,7 @@ const FALLBACK_QUOTES = [
 ];
 
 export default function HomeScreen() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const s = getStyles(colors);
 
   const [profileName, setProfileName] = useState('Guest');
@@ -79,7 +79,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={s.safe}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.statusBar} />
 
       <View style={s.topBar}>
         <Text style={s.appTitle}>HOME</Text>

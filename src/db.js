@@ -364,13 +364,37 @@ export const getTodayLogs = async (type) => {
 
 /**
  * Permanently delete **every** log entry.
- * Used by the "Clear All Data" button added in Step 6.
+ * Used by the "Clear All Data" button.
+ * 
+ * This will delete:
+ * - All logs (water, caffeine, mood, focus, vitamin_c, sugar)
+ * - All meals and their associated foods
+ * - All nutrition entries
+ * - All conversation history
+ * - Keep settings intact (user preferences are preserved)
  *
  * @returns {Promise<void>}
  */
 export const clearAllLogs = async () => {
   const db = await getDB();
-  await db.runAsync("DELETE FROM logs;");
+  
+  // Clear all tables in a transaction for consistency
+  await db.withTransactionAsync(async () => {
+    // Clear logs (water, caffeine, mood, focus, etc.)
+    await db.runAsync("DELETE FROM logs;");
+    
+    // Clear nutrition data
+    await db.runAsync("DELETE FROM foods;");  // This will cascade to meals via foreign key
+    await db.runAsync("DELETE FROM meals;");
+    await db.runAsync("DELETE FROM nutrition;");
+    
+    // Clear conversation history
+    await db.runAsync("DELETE FROM conversation_messages;");
+    await db.runAsync("DELETE FROM conversations;");
+    
+    // Reset SQLite sequence counters for auto-increment IDs
+    await db.runAsync("DELETE FROM sqlite_sequence WHERE name IN ('logs', 'meals', 'foods', 'nutrition', 'conversations', 'conversation_messages');");
+  });
 };
 
 // ─────────────────────────────────────────────────────────────────────────────

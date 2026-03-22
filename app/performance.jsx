@@ -7,7 +7,7 @@ import NutritionChart from '../src/components/NutritionChart';
 import { useTheme } from '../src/theme';
 
 export default function PerformanceScreen() {
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
   const s = getStyles(colors);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -20,7 +20,7 @@ export default function PerformanceScreen() {
 
   return (
     <SafeAreaView style={s.safe}>
-      <StatusBar barStyle="light-content" backgroundColor={colors.background} />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.statusBar} />
       
       <View style={s.topBar}>
         <Text style={s.appTitle}>PERFORMANCE</Text>
