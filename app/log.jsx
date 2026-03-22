@@ -141,7 +141,7 @@ const getStyles = (colors) => StyleSheet.create({
   tabText: { fontSize: 13, fontWeight: '600', color: colors.textDim },
   tabTextActive: { color: colors.primary },
   downloadSection: { paddingHorizontal: 12, paddingTop: 12 },
-  chatSection: { flex: 1, marginTop: 8 },
+  chatSection: { flex: 1, marginTop: 8, marginBottom: 80 },
   historySection: { flex: 1, marginTop: 8 },
   fab: { position: 'absolute', right: 20, bottom: 100, width: 56, height: 56, borderRadius: 28, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center', elevation: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4 },
 });

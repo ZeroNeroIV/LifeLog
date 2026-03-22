@@ -230,7 +230,7 @@ export default function NutritionChat({ modelReady }) {
   }
 
   return (
-    <KeyboardAvoidingView style={s.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={100}>
+    <KeyboardAvoidingView style={s.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}>
       <FlatList
         ref={flatListRef}
         data={messages}
@@ -332,7 +332,7 @@ const getStyles = (colors) => StyleSheet.create({
   placeholderHint: { fontSize: 12, color: colors.textDim, textAlign: 'center', marginTop: 8 },
   retryBtn: { backgroundColor: colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12, marginTop: 8 },
   retryBtnText: { fontSize: 14, fontWeight: '700', color: colors.primaryText },
-  messagesList: { padding: 16, paddingBottom: 8 },
+  messagesList: { padding: 16, paddingBottom: 16 },
   emptyChat: { alignItems: 'center', paddingVertical: 40 },
   emptyChatText: { fontSize: 18, fontWeight: '700', color: colors.text },
   emptyChatHint: { fontSize: 13, color: colors.textDim, marginTop: 8 },
