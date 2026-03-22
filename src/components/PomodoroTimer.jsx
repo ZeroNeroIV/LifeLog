@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, KeyboardAvoidingView, ScrollView, Platform, Pressable, Alert } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { Play, Square, RefreshCcw, Coffee, Settings, X, Plus, CheckCircle2, Pencil, Trash2, BellOff } from 'lucide-react-native';
-import * as Haptics from 'expo-haptics';
 import { useAudioPlayer } from 'expo-audio';
 import { addLog, getSetting, updateSetting } from '../db';
 import { updatePomodoroNotification, clearPomodoroNotification } from '../notifications';
@@ -18,10 +17,9 @@ export default function PomodoroTimer({ onSessionComplete }) {
   const { colors } = useTheme();
   const s = getStyles(colors);
 
-  // Lazy-load audio players - only load when timer starts
-  const [audioLoaded, setAudioLoaded] = useState(false);
-  const workPlayer = useAudioPlayer(audioLoaded ? 'https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg' : null, { updateInterval: 0 });
-  const breakPlayer = useAudioPlayer(audioLoaded ? 'https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg' : null, { updateInterval: 0 });
+  // Audio players - loaded on mount to avoid re-render issues
+  const workPlayer = useAudioPlayer('https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg', { updateInterval: 0 });
+  const breakPlayer = useAudioPlayer('https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg', { updateInterval: 0 });
 
   const [mode, setMode] = useState('work'); 
   const [cycle, setCycle] = useState(1);
@@ -99,8 +97,6 @@ export default function PomodoroTimer({ onSessionComplete }) {
     clearInterval(timerRef.current);
     setIsActive(false);
     clearPomodoroNotification();
-    
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
     if (mode === 'work') {
       workPlayer?.play();
@@ -127,7 +123,6 @@ export default function PomodoroTimer({ onSessionComplete }) {
   };
 
   const stopAudio = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     workPlayer?.pause();
     breakPlayer?.pause();
     workPlayer?.seekTo(0);
@@ -135,15 +130,11 @@ export default function PomodoroTimer({ onSessionComplete }) {
   };
 
   const toggleTimer = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    // Lazy-load audio on first timer start
-    if (!audioLoaded) setAudioLoaded(true);
     if (!isActive) stopAudio();
     setIsActive(!isActive);
   };
 
   const resetTimer = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     stopAudio();
     setIsActive(false);
     setMode('work');
@@ -167,7 +158,6 @@ export default function PomodoroTimer({ onSessionComplete }) {
   }, [activeProfile]);
 
   const runTest = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     setIsActive(false);
     setMode('work');
     setTimeLeft(5); 
