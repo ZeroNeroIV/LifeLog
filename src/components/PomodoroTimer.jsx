@@ -77,18 +77,23 @@ export default function PomodoroTimer({ onSessionComplete }) {
       timerRef.current = setInterval(() => {
         setTimeLeft((prev) => prev - 1);
       }, 1000);
-      
-      // Paint the current tick to the native OS notification buffer silently
-      updatePomodoroNotification(timeLeft, mode, activeProfile.name);
-      
     } else if (isActive && timeLeft === 0) {
       handleComplete();
-    } else if (!isActive) {
-      clearPomodoroNotification();
     }
     
     return () => clearInterval(timerRef.current);
-  }, [isActive, timeLeft, mode, activeProfile.name]);
+  }, [isActive, timeLeft]);
+
+  // Separate effect for notification updates (only when timer starts/stops)
+  useEffect(() => {
+    if (isActive) {
+      // Update notification when timer starts
+      updatePomodoroNotification(timeLeft, mode, activeProfile.name);
+    } else {
+      // Clear notification when timer stops
+      clearPomodoroNotification();
+    }
+  }, [isActive]);
 
   const handleComplete = async () => {
     clearInterval(timerRef.current);

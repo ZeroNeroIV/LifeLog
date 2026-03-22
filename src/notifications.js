@@ -99,6 +99,11 @@ export const forceTestMoodCheck = async () => {
 };
 
 export const updatePomodoroNotification = async (timeLeft, mode, activeName) => {
+  // Skip in Expo Go - notifications not available in SDK 53+
+  if (!Notifications.scheduleNotificationAsync) {
+    return;
+  }
+
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
   const timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
@@ -119,11 +124,22 @@ export const updatePomodoroNotification = async (timeLeft, mode, activeName) => 
       },
       trigger: null,
     });
-  } catch (err) {}
+  } catch (err) {
+    // Silently fail if notifications are not available
+    console.log('[Notifications] Not available in Expo Go');
+  }
 };
 
 export const clearPomodoroNotification = async () => {
+  // Skip in Expo Go - notifications not available in SDK 53+
+  if (!Notifications.cancelScheduledNotificationAsync) {
+    return;
+  }
+
   try {
     await Notifications.cancelScheduledNotificationAsync('pomodoro-timer');
-  } catch(err) {}
+  } catch(err) {
+    // Silently fail if notifications are not available
+    console.log('[Notifications] Not available in Expo Go');
+  }
 };
