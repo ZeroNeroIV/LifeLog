@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { View, Text, StyleSheet, Platform, StatusBar, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,18 +16,17 @@ export default function NutritionScreen() {
   const { colors } = useTheme();
   const s = getStyles(colors);
   const [modelReady, setModelReady] = useState(false);
-  const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'history'
+  const [activeTab, setActiveTab] = useState('chat');
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [showFoodReport, setShowFoodReport] = useState(false);
   const [reportFoodName, setReportFoodName] = useState('');
   const [todayTotals, setTodayTotals] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 });
   const [goals, setGoals] = useState({ calories: 2000, protein: 50, carbs: 250, fat: 65, fiber: 30 });
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  useFocusEffect(
-    useCallback(() => {
-      loadData();
-    }, [])
-  );
+  useFocusEffect(() => {
+    loadData();
+  });
 
   const loadData = async () => {
     const [totals, settings] = await Promise.all([getTodayNutritionTotals(), getAllSettings()]);
@@ -39,6 +38,7 @@ export default function NutritionScreen() {
       fat: parseInt(settings.nutrition_fat_goal) || 65,
       fiber: parseInt(settings.nutrition_fiber_goal) || 30,
     });
+    setRefreshKey(prev => prev + 1);
   };
 
   const MacroBar = ({ label, value, goal, color }) => {
@@ -64,7 +64,6 @@ export default function NutritionScreen() {
         <Text style={s.appTitle}>NUTRITION</Text>
       </View>
 
-      {/* Today's Summary */}
       <View style={s.summaryCard}>
         <View style={s.calorieRow}>
           <Text style={s.calorieValue}>{Math.round(todayTotals.calories)}</Text>
@@ -77,7 +76,6 @@ export default function NutritionScreen() {
         </View>
       </View>
 
-      {/* Tab Switcher */}
       <View style={s.tabBar}>
         <TouchableOpacity style={[s.tab, activeTab === 'chat' && s.tabActive]} onPress={() => setActiveTab('chat')}>
           <MessageSquare size={16} color={activeTab === 'chat' ? colors.primary : colors.textDim} />
@@ -89,10 +87,8 @@ export default function NutritionScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Model Download (collapsed when ready) */}
       {!modelReady && activeTab === 'chat' && <View style={s.downloadSection}><ModelDownloadCard onModelReady={setModelReady} /></View>}
 
-      {/* Content */}
       {activeTab === 'chat' ? (
         <View style={s.chatSection}>
           <NutritionChat modelReady={modelReady} />
@@ -100,16 +96,14 @@ export default function NutritionScreen() {
       ) : (
         <ScrollView style={s.historySection} contentContainerStyle={{ paddingBottom: 100 }}>
           <QuickFoodButtons onFoodAdded={loadData} />
-          <MealHistoryCard onUpdate={loadData} />
+          <MealHistoryCard onUpdate={loadData} refreshKey={refreshKey} />
         </ScrollView>
       )}
 
-      {/* Manual Entry FAB */}
       <TouchableOpacity style={s.fab} onPress={() => setShowManualEntry(true)}>
         <Plus size={24} color={colors.primaryText} />
       </TouchableOpacity>
 
-      {/* Manual Food Entry Modal */}
       <ManualFoodEntry 
         visible={showManualEntry} 
         onClose={() => setShowManualEntry(false)} 
@@ -117,7 +111,6 @@ export default function NutritionScreen() {
         onReportFood={(name) => { setReportFoodName(name); setShowFoodReport(true); }}
       />
 
-      {/* Food Report Modal */}
       <FoodReportModal
         visible={showFoodReport}
         onClose={() => { setShowFoodReport(false); setReportFoodName(''); }}

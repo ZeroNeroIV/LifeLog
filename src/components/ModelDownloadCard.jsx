@@ -36,7 +36,7 @@ export default function ModelDownloadCard({ onModelReady }) {
     }
   };
 
-  const handleDownload = async () => {
+  const handleDownload = async (modelType = 'primary') => {
     setStatus('downloading');
     setError(null);
     try {
@@ -51,7 +51,7 @@ export default function ModelDownloadCard({ onModelReady }) {
           setError(p.error);
           setStatus('error');
         }
-      });
+      }, modelType);
     } catch (e) {
       setError(e.message);
       setStatus('error');
@@ -87,14 +87,17 @@ export default function ModelDownloadCard({ onModelReady }) {
       {status === 'not_downloaded' && (
         <View style={s.content}>
           <Text style={s.description}>
-            Download the AI model (~{formatBytes(sizes.primary)}) to enable natural language food logging.
+            Download the AI model to enable natural language food logging.
           </Text>
           {spaceInfo && (
             <Text style={s.spaceText}>Available: {formatBytes(spaceInfo.available)}</Text>
           )}
-          <TouchableOpacity style={s.downloadBtn} onPress={handleDownload}>
+          <TouchableOpacity style={s.downloadBtn} onPress={() => handleDownload('primary')}>
             <Download size={18} color={colors.primaryText} />
-            <Text style={s.downloadBtnText}>Download Model</Text>
+            <Text style={s.downloadBtnText}>Download (~{formatBytes(sizes.primary)})</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.smallDownloadBtn} onPress={() => handleDownload('fallback')}>
+            <Text style={s.smallDownloadBtnText}>Or download smaller model (~{formatBytes(sizes.fallback)})</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -137,9 +140,14 @@ export default function ModelDownloadCard({ onModelReady }) {
         <View style={s.content}>
           <AlertCircle size={24} color={colors.danger} />
           <Text style={s.errorText}>{error}</Text>
-          <TouchableOpacity style={s.retryBtn} onPress={checkModelStatus}>
-            <Text style={s.retryBtnText}>Retry</Text>
-          </TouchableOpacity>
+          <View style={s.errorActions}>
+            <TouchableOpacity style={s.retryBtn} onPress={() => handleDownload('primary')}>
+              <Text style={s.retryBtnText}>Retry</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.retryBtn} onPress={() => handleDownload('fallback')}>
+              <Text style={s.retryBtnText}>Try Smaller Model</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       )}
     </View>
@@ -156,6 +164,8 @@ const getStyles = (colors) => StyleSheet.create({
   statusText: { fontSize: 12, color: colors.textDim },
   downloadBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 },
   downloadBtnText: { fontSize: 14, fontWeight: '700', color: colors.primaryText },
+  smallDownloadBtn: { paddingVertical: 8 },
+  smallDownloadBtnText: { fontSize: 12, color: colors.textMuted, textDecorationLine: 'underline' },
   progressContainer: { width: '100%', height: 8, backgroundColor: colors.surfaceInput, borderRadius: 4, overflow: 'hidden' },
   progressBar: { height: '100%', backgroundColor: colors.primary, borderRadius: 4 },
   progressText: { fontSize: 13, fontWeight: '600', color: colors.text },
@@ -164,6 +174,7 @@ const getStyles = (colors) => StyleSheet.create({
   deleteBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, padding: 8 },
   deleteBtnText: { fontSize: 12, color: colors.danger },
   errorText: { fontSize: 13, color: colors.danger, textAlign: 'center' },
+  errorActions: { flexDirection: 'row', gap: 8 },
   retryBtn: { backgroundColor: colors.surfaceInput, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
   retryBtnText: { fontSize: 13, fontWeight: '600', color: colors.text },
 });

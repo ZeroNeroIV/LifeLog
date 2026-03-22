@@ -27,7 +27,9 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "package": "com.lifelog.app",
-      "permissions": ["android.permission.RECORD_AUDIO"]
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -42,6 +44,12 @@
           "speechRecognitionPermission": "This app uses speech recognition to log your meals by voice"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a392ea7f-e3a9-4be1-b59d-edc8ae649d6f"
+      }
+    }
   }
 }

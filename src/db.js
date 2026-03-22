@@ -116,8 +116,8 @@ const _bootstrapSchema = async (db) => {
   await db.execAsync("DROP TABLE IF EXISTS settings;");
 
   // logs: one row per metric event
-  //   type  = 'water' | 'caffeine' | 'mood' | 'focus'
-  //   value = mL      | mg         | 1-5    | minutes
+  //   type  = 'water' | 'caffeine' | 'mood' | 'focus' | 'vitamin_c' | 'sugar'
+  //   value = mL      | mg         | 1-5    | minutes | mg          | g
   await db.execAsync(
     `CREATE TABLE logs (
       id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -264,8 +264,8 @@ export const initializeDB = async () => {
 /**
  * Append a new metric entry to the logs table.
  *
- * @param {'water' | 'caffeine' | 'mood' | 'focus'} type
- * @param {number} value  –  mL / mg / 1-5 rating / minutes
+ * @param {'water' | 'caffeine' | 'mood' | 'focus' | 'vitamin_c' | 'sugar'} type
+ * @param {number} value  –  mL / mg / 1-5 rating / minutes / mg / g
  * @returns {Promise<number>}  The newly inserted row id.
  *
  * @example
@@ -287,7 +287,7 @@ export const addLog = async (type, value) => {
  * Return daily totals for the **last 7 days** for a given metric type,
  * sorted ascending by date so chart libraries can use the array directly.
  *
- * @param {'water' | 'caffeine' | 'mood' | 'focus'} type
+ * @param {'water' | 'caffeine' | 'mood' | 'focus' | 'vitamin_c' | 'sugar'} type
  * @returns {Promise<Array<{ date: string, total: number }>>}
  *   `date` is formatted 'YYYY-MM-DD' in the device's local timezone.
  *
@@ -317,7 +317,7 @@ export const getWeeklyData = async (type) => {
  * Return the sum of all values logged **today** for a given type.
  * Returns 0 when no entries exist (never throws).
  *
- * @param {'water' | 'caffeine' | 'mood' | 'focus'} type
+ * @param {'water' | 'caffeine' | 'mood' | 'focus' | 'vitamin_c' | 'sugar'} type
  * @returns {Promise<number>}
  *
  * @example
@@ -344,7 +344,7 @@ export const getTodayTotal = async (type) => {
  * Return all individual log entries for **today**, newest-first.
  * Useful for rendering a "Today's activity" list on the dashboard.
  *
- * @param {'water' | 'caffeine' | 'mood' | 'focus'} type
+ * @param {'water' | 'caffeine' | 'mood' | 'focus' | 'vitamin_c' | 'sugar'} type
  * @returns {Promise<Array<{ id: number, type: string, value: number, timestamp: number }>>}
  */
 export const getTodayLogs = async (type) => {
@@ -794,6 +794,13 @@ export const getWeeklyNutritionData = async () => {
  * @param {number} [tolerance=0.1] - Fraction below goal still counts (10% default)
  * @returns {Promise<{ currentStreak: number, longestStreak: number }>}
  */
+/**
+ * Calculate nutrition goal streak (consecutive days meeting calorie goal).
+ *
+ * @param {number} calorieGoal
+ * @param {number} [tolerance=0.1] - Fraction below goal still counts (10% default)
+ * @returns {Promise<{ currentStreak: number, longestStreak: number }>}
+ */
 export const getNutritionStreak = async (calorieGoal, tolerance = 0.1) => {
   const db = await getDB();
   const thirtyDaysAgo = Math.floor(Date.now() / 1000) - 30 * 24 * 60 * 60;
@@ -816,13 +823,20 @@ export const getNutritionStreak = async (calorieGoal, tolerance = 0.1) => {
   let tempStreak = 0;
   let streakBroken = false;
 
-  // Check from today backwards
-  const today = new Date().toISOString().split('T')[0];
+  // Helper to get local date string (YYYY-MM-DD)
+  const getLocalDateString = (date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const today = getLocalDateString(new Date());
   
   for (let i = 0; i < 30; i++) {
     const d = new Date();
     d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().split('T')[0];
+    const dateStr = getLocalDateString(d);
     
     const dayData = data.find(r => r.date === dateStr);
     const metGoal = dayData && dayData.calories >= minCalories;

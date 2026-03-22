@@ -1,11 +1,16 @@
 // src/components/ManualFoodEntry.jsx - Manual Food Search & Entry
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, ActivityIndicator, Modal } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, ActivityIndicator, Modal, Dimensions } from 'react-native';
 import { Search, X, Check, AlertTriangle, Edit3 } from 'lucide-react-native';
+import { GestureDetector, Gesture } from 'react-native-gesture-handler';
+import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from 'react-native-reanimated';
 import { useTheme } from '../theme';
 import { searchDrinks } from '../services/nutritionApi';
 import { createMeal, addFoodToMeal } from '../db';
 import * as Haptics from 'expo-haptics';
+
+const { height: SCREEN_HEIGHT } = Dimensions.get('window');
+const MAX_TRANSLATE_Y = -SCREEN_HEIGHT * 0.8;
 
 // Debounce hook
 const useDebounce = (value, delay) => {
@@ -32,6 +37,40 @@ export default function ManualFoodEntry({ visible, onClose, onFoodAdded, onRepor
   const [customProtein, setCustomProtein] = useState('');
   const [customCarbs, setCustomCarbs] = useState('');
   const [customFat, setCustomFat] = useState('');
+
+  // Gesture handling for draggable bottom sheet
+  const translateY = useSharedValue(0);
+  const context = useSharedValue({ y: 0 });
+
+  const gesture = Gesture.Pan()
+    .onStart(() => {
+      context.value = { y: translateY.value };
+    })
+    .onUpdate((event) => {
+      // Only allow downward dragging (closing gesture)
+      translateY.value = Math.max(context.value.y + event.translationY, MAX_TRANSLATE_Y);
+    })
+    .onEnd((event) => {
+      // If dragged down more than 150px or velocity is high, close
+      if (event.translationY > 150 || event.velocityY > 500) {
+        runOnJS(resetAndClose)();
+      } else {
+        // Snap back to open position
+        translateY.value = withSpring(0);
+      }
+    });
+
+  const rBottomSheetStyle = useAnimatedStyle(() => {
+    return {
+      transform: [{ translateY: translateY.value }],
+    };
+  });
+
+  useEffect(() => {
+    if (visible) {
+      translateY.value = withSpring(0);
+    }
+  }, [visible]);
 
   const debouncedQuery = useDebounce(query, 400);
 
@@ -151,15 +190,21 @@ export default function ManualFoodEntry({ visible, onClose, onFoodAdded, onRepor
   );
 
   return (
-    <Modal visible={visible} animationType="slide" transparent>
+    <Modal visible={visible} animationType="fade" transparent>
       <View style={s.overlay}>
-        <View style={s.modal}>
-          <View style={s.header}>
-            <Text style={s.title}>Add Food</Text>
-            <TouchableOpacity onPress={resetAndClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-              <X size={24} color={colors.textMuted} />
-            </TouchableOpacity>
-          </View>
+        <GestureDetector gesture={gesture}>
+          <Animated.View style={[s.modal, rBottomSheetStyle]}>
+            {/* Drag handle */}
+            <View style={s.dragHandle}>
+              <View style={s.dragIndicator} />
+            </View>
+            
+            <View style={s.header}>
+              <Text style={s.title}>Add Food</Text>
+              <TouchableOpacity onPress={resetAndClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <X size={24} color={colors.textMuted} />
+              </TouchableOpacity>
+            </View>
 
           {!selectedFood && !customMode ? (
             <>
@@ -289,7 +334,8 @@ export default function ManualFoodEntry({ visible, onClose, onFoodAdded, onRepor
               </View>
             </View>
           )}
-        </View>
+        </Animated.View>
+      </GestureDetector>
       </View>
     </Modal>
   );
@@ -298,7 +344,9 @@ export default function ManualFoodEntry({ visible, onClose, onFoodAdded, onRepor
 const getStyles = (colors) => StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modal: { backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '80%', minHeight: 400 },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: colors.surfaceBorder },
+  dragHandle: { alignItems: 'center', paddingVertical: 12 },
+  dragIndicator: { width: 40, height: 4, backgroundColor: colors.surfaceBorder, borderRadius: 2 },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingBottom: 16, borderBottomWidth: 1, borderBottomColor: colors.surfaceBorder },
   title: { fontSize: 18, fontWeight: '700', color: colors.text },
   searchBar: { flexDirection: 'row', alignItems: 'center', gap: 10, margin: 16, backgroundColor: colors.surfaceInput, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10 },
   searchInput: { flex: 1, fontSize: 15, color: colors.text },

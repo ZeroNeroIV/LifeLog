@@ -1,7 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
-// Explicitly define how notifications should be handled when the app is actively running in the foreground
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowBanner: true,
@@ -16,7 +15,6 @@ export const initNotifications = async () => {
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
     
-    // Only ask if permissions have not already been determined
     if (existingStatus !== 'granted') {
       const { status } = await Notifications.requestPermissionsAsync();
       finalStatus = status;
@@ -27,7 +25,6 @@ export const initNotifications = async () => {
       return;
     }
 
-    // Attempt to set up a specific Android channel for mood tracking
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('mood-check', {
         name: 'Mood Reminders',
@@ -36,7 +33,6 @@ export const initNotifications = async () => {
         lightColor: '#ddb7ff',
       });
 
-      // Silent channel for constantly refreshing Live Timers without buzzing the device
       await Notifications.setNotificationChannelAsync('live-timer', {
         name: 'Live Timers',
         importance: Notifications.AndroidImportance.LOW, 
@@ -44,7 +40,6 @@ export const initNotifications = async () => {
       });
     }
 
-    // Register active actionable buttons for Live Widget
     await Notifications.setNotificationCategoryAsync('pomodoro-actions', [
       {
         identifier: 'PAUSE_TIMER',
@@ -65,7 +60,6 @@ export const initNotifications = async () => {
 
 export const scheduleNextMoodUnlockNotification = async () => {
   try {
-    // Dynamically overwrite any pending unlocks securely
     await Notifications.cancelScheduledNotificationAsync('mood-unlock');
 
     await Notifications.scheduleNotificationAsync({
@@ -76,9 +70,9 @@ export const scheduleNextMoodUnlockNotification = async () => {
         sound: true,
       },
       trigger: {
-        type: 'timeInterval',
-        seconds: 3600, // Exactly 60m structural delay
-        repeats: false, // Disconnected from generic loop; directly mapped to user interaction physically
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: 3600,
+        repeats: false,
         channelId: Platform.OS === 'android' ? 'mood-check' : undefined
       },
     });
@@ -96,7 +90,7 @@ export const forceTestMoodCheck = async () => {
         body: "This is what your hourly native push notification will look like seamlessly integrating into your lock screen.",
         sound: true,
       },
-      trigger: null, // trigger immediately
+      trigger: null,
     });
     console.log('[Native] Fired instant test notification');
   } catch (error) {
@@ -123,7 +117,7 @@ export const updatePomodoroNotification = async (timeLeft, mode, activeName) => 
         categoryIdentifier: 'pomodoro-actions',
         priority: Platform.OS === 'android' ? Notifications.AndroidNotificationPriority.LOW : undefined,
       },
-      trigger: null, // Fire instantly in real-time, completely skipping the OS scheduling queue
+      trigger: null,
     });
   } catch (err) {}
 };

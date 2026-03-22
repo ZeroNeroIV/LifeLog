@@ -18,8 +18,10 @@ export default function PomodoroTimer({ onSessionComplete }) {
   const { colors } = useTheme();
   const s = getStyles(colors);
 
-  const workPlayer = useAudioPlayer('https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg');
-  const breakPlayer = useAudioPlayer('https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg');
+  // Lazy-load audio players - only load when timer starts
+  const [audioLoaded, setAudioLoaded] = useState(false);
+  const workPlayer = useAudioPlayer(audioLoaded ? 'https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg' : null, { updateInterval: 0 });
+  const breakPlayer = useAudioPlayer(audioLoaded ? 'https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg' : null, { updateInterval: 0 });
 
   const [mode, setMode] = useState('work'); 
   const [cycle, setCycle] = useState(1);
@@ -129,6 +131,8 @@ export default function PomodoroTimer({ onSessionComplete }) {
 
   const toggleTimer = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    // Lazy-load audio on first timer start
+    if (!audioLoaded) setAudioLoaded(true);
     if (!isActive) stopAudio();
     setIsActive(!isActive);
   };

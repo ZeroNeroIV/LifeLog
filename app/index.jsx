@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import { View, Text, StyleSheet, Platform, StatusBar, ActivityIndicator, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
@@ -29,11 +29,9 @@ export default function HomeScreen() {
   const [nutritionGoal, setNutritionGoal] = useState(2000);
   const [streak, setStreak] = useState({ currentStreak: 0, longestStreak: 0 });
 
-  useFocusEffect(
-    useCallback(() => {
-      loadData();
-    }, [])
-  );
+  useFocusEffect(() => {
+    loadData();
+  });
 
   const loadData = async () => {
     const settings = await getAllSettings();
@@ -51,7 +49,6 @@ export default function HomeScreen() {
     const streakData = await getNutritionStreak(goal);
     setStreak(streakData);
 
-    // Only hit API once per mount to save network
     if (!quote) fetchQuote();
   };
 
@@ -72,7 +69,6 @@ export default function HomeScreen() {
         setAuthor(data[0].a);
       }
     } catch (e) {
-      // Offline-first graceful generic fallback
       const random = FALLBACK_QUOTES[Math.floor(Math.random() * FALLBACK_QUOTES.length)];
       setQuote(random);
       setAuthor('Life-Log System');

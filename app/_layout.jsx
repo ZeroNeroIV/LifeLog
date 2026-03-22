@@ -3,6 +3,7 @@ import { Stack, Tabs } from 'expo-router';
 import { Home, UtensilsCrossed, Activity, Timer, Settings, Monitor } from 'lucide-react-native';
 import { StatusBar } from 'expo-status-bar';
 import { View, Text, StyleSheet } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { initializeDB, addLog } from '../src/db';
 import { initNotifications } from '../src/notifications';
 import { ThemeProvider, useTheme } from '../src/theme';
@@ -84,9 +85,11 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider>
-      <MainTabs />
-    </ThemeProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ThemeProvider>
+        <MainTabs />
+      </ThemeProvider>
+    </GestureHandlerRootView>
   );
 }
 

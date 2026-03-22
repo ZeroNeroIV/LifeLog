@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, Platform, StatusBar, TouchableOpacity, ScrollView, TextInput, Alert, KeyboardAvoidingView, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Bell, Droplets, Trash2, Save, AlertOctagon, Sun, Moon, User, Apple } from 'lucide-react-native';
+import { Bell, Droplets, Trash2, Save, AlertOctagon, Sun, Moon, User, Apple, Timer } from 'lucide-react-native';
 import BentoCard from '../src/components/BentoCard';
 import { forceTestMoodCheck, scheduleNextMoodUnlockNotification } from '../src/notifications';
 import { getAllSettings, updateSetting, clearAllLogs } from '../src/db';
@@ -16,7 +16,8 @@ export default function SettingsScreen() {
     water_fav1_ml: '250', water_fav2_ml: '500',
     profile_fullname: '', profile_username: '', profile_email: '',
     nutrition_calorie_goal: '2000', nutrition_protein_goal: '50',
-    nutrition_carbs_goal: '250', nutrition_fat_goal: '65', nutrition_fiber_goal: '30'
+    nutrition_carbs_goal: '250', nutrition_fat_goal: '65', nutrition_fiber_goal: '30',
+    pomodoro_profiles: '', pomodoro_active_profile: '1'
   });
 
   useEffect(() => {
@@ -40,6 +41,7 @@ export default function SettingsScreen() {
     await updateSetting('nutrition_carbs_goal', settings.nutrition_carbs_goal || '250');
     await updateSetting('nutrition_fat_goal', settings.nutrition_fat_goal || '65');
     await updateSetting('nutrition_fiber_goal', settings.nutrition_fiber_goal || '30');
+    // Pomodoro settings are saved separately by the timer component
     Alert.alert("Saved", "Settings have been updated!");
   };
 
@@ -155,6 +157,27 @@ export default function SettingsScreen() {
               </View>
           </BentoCard>
 
+          <BentoCard title="Pomodoro Profiles" subtitle="Timer Presets" icon={Timer} color="#f59e0b" style={{marginBottom: 16}}>
+              <View style={s.menuBox}>
+                  <Text style={s.menuText}>
+                    Pomodoro profiles are managed in the Focus tab. Your current profiles are persisted automatically.
+                  </Text>
+                  {settings.pomodoro_profiles && (
+                    <View style={s.profilesContainer}>
+                      <Text style={s.label}>Active Profiles ({JSON.parse(settings.pomodoro_profiles || '[]').length})</Text>
+                      {JSON.parse(settings.pomodoro_profiles).map((profile, idx) => (
+                        <View key={idx} style={s.profileItem}>
+                          <Text style={s.profileName}>{profile.name}</Text>
+                          <Text style={s.profileDetails}>
+                            {profile.work}m work / {profile.shortBreak}m short / {profile.longBreak}m long
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+              </View>
+          </BentoCard>
+
           <BentoCard title="Preferences" subtitle="Quick Logs" icon={Droplets} color={colors.primary} style={{marginBottom: 16}}>
               <View style={s.menuBox}>
                   <Text style={s.label}>Water Auto-Add 1 (mL)</Text>
@@ -237,4 +260,9 @@ const getStyles = (colors) => StyleSheet.create({
 
   btnDanger: { flexDirection: 'row', backgroundColor: colors.danger, padding: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   btnDangerText: { color: colors.dangerText, fontWeight: '800', fontSize: 14 },
+
+  profilesContainer: { marginTop: 8 },
+  profileItem: { backgroundColor: colors.surfaceInput, padding: 12, borderRadius: 8, marginBottom: 8, borderWidth: 1, borderColor: colors.surfaceBorder },
+  profileName: { color: colors.text, fontSize: 14, fontWeight: '700', marginBottom: 4 },
+  profileDetails: { color: colors.textDim, fontSize: 12 },
 });

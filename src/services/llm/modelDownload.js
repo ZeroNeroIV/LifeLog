@@ -6,34 +6,36 @@
 // Also checks for bundled models in app assets.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import * as FileSystem from "expo-file-system";
+import { File, Directory, Paths } from "expo-file-system";
+import * as LegacyFileSystem from "expo-file-system/legacy";
 import { getSetting, updateSetting } from "../../db";
 
 // ─── Model Configuration ──────────────────────────────────────────────────────
 
 // Gemma 3n E2B quantized (primary) - optimized for edge/mobile
-// Fallback: Gemma 2 2B quantized
+// Fallback: Gemma 2 2B quantized (smaller Q4_K_S for faster download)
 const MODELS = {
   primary: {
-    name: "gemma-3n-e2b-q4",
-    // Using Hugging Face as CDN - replace with actual model URL when available
-    url: "https://huggingface.co/anthropics/gemma-3n-e2b-it-Q4_K_M-GGUF/resolve/main/gemma-3n-e2b-it-q4_k_m.gguf",
-    sizeBytes: 2_000_000_000, // ~2GB
-    filename: "gemma-3n-e2b-q4.gguf",
+    name: "gemma-2-2b-q4-medium",
+    // Using Hugging Face as CDN - Gemma 2 2B Q4_K_M (balanced quality/size)
+    url: "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf",
+    sizeBytes: 1_500_000_000, // ~1.5GB
+    filename: "gemma-2-2b-q4-medium.gguf",
   },
   fallback: {
-    name: "gemma-2-2b-q4",
-    url: "https://huggingface.co/google/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-q4_k_m.gguf",
-    sizeBytes: 1_500_000_000, // ~1.5GB
-    filename: "gemma-2-2b-q4.gguf",
+    name: "gemma-2-2b-q4-small",
+    // Smaller Q4_K_S quantization for faster download and less storage
+    url: "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_S.gguf",
+    sizeBytes: 1_300_000_000, // ~1.3GB
+    filename: "gemma-2-2b-q4-small.gguf",
   },
 };
 
 // Bundled model asset path (if built with build-with-model.sh)
-const BUNDLED_MODEL_ASSET = "models/gemma-2-2b-q4.gguf";
+const BUNDLED_MODEL_ASSET = "models/gemma-2-2b-q4-medium.gguf";
 
 // Directory where models are stored
-const MODEL_DIR = `${FileSystem.documentDirectory}models/`;
+const MODEL_DIR = new Directory(Paths.document, 'models');
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -60,9 +62,8 @@ const MODEL_DIR = `${FileSystem.documentDirectory}models/`;
  * Ensure the models directory exists.
  */
 const ensureModelDir = async () => {
-  const dirInfo = await FileSystem.getInfoAsync(MODEL_DIR);
-  if (!dirInfo.exists) {
-    await FileSystem.makeDirectoryAsync(MODEL_DIR, { intermediates: true });
+  if (!MODEL_DIR.exists) {
+    MODEL_DIR.create({ intermediates: true });
   }
 };
 
@@ -88,10 +89,9 @@ export const formatBytes = (bytes) => {
 const checkBundledModel = async () => {
   try {
     // Check if bundled model exists in assets
-    const bundledPath = `${FileSystem.bundleDirectory}assets/models/gemma-2-2b-q4.gguf`;
-    const info = await FileSystem.getInfoAsync(bundledPath);
-    if (info.exists) {
-      return bundledPath;
+    const bundledFile = new File(Paths.bundle, 'assets', 'models', 'gemma-2-2b-q4-medium.gguf');
+    if (bundledFile.exists) {
+      return bundledFile.uri;
     }
   } catch (e) {
     // No bundled model - that's fine, user will download
@@ -111,13 +111,16 @@ export const getModelInfo = async () => {
 
   if (isDownloaded && path) {
     // Verify the file still exists
-    const fileInfo = await FileSystem.getInfoAsync(path);
-    if (fileInfo.exists) {
+    const file = new File(path);
+    if (file.exists) {
+      const size = file.size;
       return {
         isDownloaded: true,
         path,
-        name: path.includes("gemma-3n") ? MODELS.primary.name : MODELS.fallback.name,
-        sizeBytes: fileInfo.size,
+        name: path.includes("gemma-3n")
+          ? MODELS.primary.name
+          : MODELS.fallback.name,
+        sizeBytes: size,
       };
     }
     // File was deleted - reset settings
@@ -162,24 +165,34 @@ export const downloadModel = async (onProgress, modelType = "primary") => {
   const model = MODELS[modelType];
   await ensureModelDir();
 
-  const destPath = `${MODEL_DIR}${model.filename}`;
+  const destFile = new File(MODEL_DIR, model.filename);
+  const destPath = destFile.uri;
 
-  // Check if already exists
-  const existing = await FileSystem.getInfoAsync(destPath);
-  if (existing.exists && existing.size > model.sizeBytes * 0.95) {
-    // File exists and is roughly the right size
-    await updateSetting("llm_model_downloaded", "true");
-    await updateSetting("llm_model_path", destPath);
-    onProgress({
-      status: "completed",
-      progress: 1,
-      downloadedBytes: existing.size,
-      totalBytes: existing.size,
-    });
-    return destPath;
+  // Check if already exists and is complete
+  if (destFile.exists) {
+    const size = destFile.size;
+    if (size > model.sizeBytes * 0.95) {
+      // File exists and is roughly the right size
+      await updateSetting("llm_model_downloaded", "true");
+      await updateSetting("llm_model_path", destPath);
+      onProgress({
+        status: "completed",
+        progress: 1,
+        downloadedBytes: size,
+        totalBytes: size,
+      });
+      return destPath;
+    } else {
+      // Partial or corrupted file - delete it before redownloading
+      try {
+        await destFile.delete();
+      } catch (e) {
+        // Ignore delete errors, just try to download
+      }
+    }
   }
 
-  // Start download
+  // Start download - using legacy API for downloadResumable
   onProgress({
     status: "downloading",
     progress: 0,
@@ -187,10 +200,16 @@ export const downloadModel = async (onProgress, modelType = "primary") => {
     totalBytes: model.sizeBytes,
   });
 
-  const downloadResumable = FileSystem.createDownloadResumable(
+  const downloadResumable = LegacyFileSystem.createDownloadResumable(
     model.url,
     destPath,
-    {},
+    {
+      headers: {
+        'User-Agent': 'LifeLog/1.0',
+      },
+      // Increase timeout for large file downloads
+      sessionType: LegacyFileSystem.FileSystemSessionType.BACKGROUND,
+    },
     (downloadProgress) => {
       const progress =
         downloadProgress.totalBytesWritten /
@@ -201,7 +220,7 @@ export const downloadModel = async (onProgress, modelType = "primary") => {
         downloadedBytes: downloadProgress.totalBytesWritten,
         totalBytes: downloadProgress.totalBytesExpectedToWrite,
       });
-    }
+    },
   );
 
   try {
@@ -211,10 +230,13 @@ export const downloadModel = async (onProgress, modelType = "primary") => {
       throw new Error("Download failed - no URI returned");
     }
 
-    // Verify file size
-    const fileInfo = await FileSystem.getInfoAsync(result.uri);
-    if (fileInfo.size < model.sizeBytes * 0.9) {
-      throw new Error("Downloaded file is smaller than expected - may be corrupted");
+    // Verify file size using new API
+    const downloadedFile = new File(result.uri);
+    const fileSize = downloadedFile.size;
+    if (fileSize < model.sizeBytes * 0.9) {
+      throw new Error(
+        `Downloaded file is smaller than expected (${formatBytes(fileSize)} vs ${formatBytes(model.sizeBytes)}) - may be corrupted`,
+      );
     }
 
     // Save settings
@@ -224,20 +246,28 @@ export const downloadModel = async (onProgress, modelType = "primary") => {
     onProgress({
       status: "completed",
       progress: 1,
-      downloadedBytes: fileInfo.size,
-      totalBytes: fileInfo.size,
+      downloadedBytes: fileSize,
+      totalBytes: fileSize,
     });
 
     return result.uri;
   } catch (error) {
+    // Provide more context for network errors
+    let errorMessage = error.message;
+    if (error.message?.includes("abort") || error.message?.includes("network")) {
+      errorMessage = `Network error: ${error.message}. Check your internet connection and try again. Large file downloads (${formatBytes(model.sizeBytes)}) may require a stable connection.`;
+    } else if (error.message?.includes("timeout")) {
+      errorMessage = `Download timeout: The model file is large (${formatBytes(model.sizeBytes)}). Please ensure you have a stable internet connection and try again.`;
+    }
+    
     onProgress({
       status: "error",
       progress: 0,
       downloadedBytes: 0,
       totalBytes: model.sizeBytes,
-      error: error.message,
+      error: errorMessage,
     });
-    throw error;
+    throw new Error(errorMessage);
   }
 };
 
@@ -250,9 +280,9 @@ export const deleteModel = async () => {
   const path = await getSetting("llm_model_path");
 
   if (path) {
-    const fileInfo = await FileSystem.getInfoAsync(path);
-    if (fileInfo.exists) {
-      await FileSystem.deleteAsync(path, { idempotent: true });
+    const file = new File(path);
+    if (file.exists) {
+      await file.delete();
     }
   }
 
@@ -266,7 +296,7 @@ export const deleteModel = async () => {
  * @returns {Promise<number>} Available bytes
  */
 export const getAvailableSpace = async () => {
-  const freeSpace = await FileSystem.getFreeDiskStorageAsync();
+  const freeSpace = await LegacyFileSystem.getFreeDiskStorageAsync();
   return freeSpace;
 };
 

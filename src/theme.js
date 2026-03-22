@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { View, StyleSheet } from 'react-native';
 import { getSetting, updateSetting } from './db';
 
 export const THEMES = {
@@ -71,7 +72,13 @@ export const ThemeProvider = ({ children }) => {
 
   const colors = THEMES[themeMode] || THEMES.dark;
 
-  if (!isReady) return null;
+  if (!isReady) {
+    return (
+      <View style={loadingStyles.container}>
+        <View style={[loadingStyles.dot, { backgroundColor: '#7de9ff' }]} />
+      </View>
+    );
+  }
 
   return (
     <ThemeContext.Provider value={{ colors, isDark: themeMode === 'dark', toggleTheme }}>
@@ -79,5 +86,19 @@ export const ThemeProvider = ({ children }) => {
     </ThemeContext.Provider>
   );
 };
+
+const loadingStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#0e0e0e',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+});
 
 export const useTheme = () => useContext(ThemeContext);
