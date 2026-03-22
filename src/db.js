@@ -18,7 +18,7 @@ let _db = null;
  * Return the open database handle, opening (and bootstrapping) it on first call.
  * @returns {Promise<SQLite.SQLiteDatabase>}
  */
-const getDB = async () => {
+export const getDB = async () => {
   if (_db) return _db;
   _db = await SQLite.openDatabaseAsync("lifelog.db");
   await _bootstrapSchema(_db);

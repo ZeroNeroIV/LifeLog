@@ -192,7 +192,9 @@ export default function SettingsScreen() {
                   />
 
                   <TouchableOpacity style={s.saveBtn} onPress={saveSettings}>
-                    <Save size={18} color={colors.primaryText} style={{ marginRight: 8 }} />
+                    <View style={{ marginRight: 8 }}>
+                      <Save size={18} color={colors.primaryText} />
+                    </View>
                     <Text style={s.saveBtnText}>Save Profile Data</Text>
                   </TouchableOpacity>
               </View>
@@ -236,7 +238,9 @@ export default function SettingsScreen() {
                   <TextInput style={s.input} keyboardType="numeric" value={settings.nutrition_fiber_goal} onChangeText={(t) => setSettings({...settings, nutrition_fiber_goal: t})} />
 
                   <TouchableOpacity style={s.saveBtn} onPress={saveSettings}>
-                    <Save size={18} color={colors.primaryText} style={{ marginRight: 8 }} />
+                    <View style={{ marginRight: 8 }}>
+                      <Save size={18} color={colors.primaryText} />
+                    </View>
                     <Text style={s.saveBtnText}>Save Goals</Text>
                   </TouchableOpacity>
               </View>
@@ -282,7 +286,9 @@ export default function SettingsScreen() {
                   />
 
                   <TouchableOpacity style={s.saveBtn} onPress={saveSettings}>
-                    <Save size={18} color={colors.primaryText} style={{ marginRight: 8 }} />
+                    <View style={{ marginRight: 8 }}>
+                      <Save size={18} color={colors.primaryText} />
+                    </View>
                     <Text style={s.saveBtnText}>Save Preferences</Text>
                   </TouchableOpacity>
               </View>
@@ -307,24 +313,32 @@ export default function SettingsScreen() {
                   <Text style={s.menuText}>Selectively delete data or wipe everything. These actions cannot be undone!</Text>
                   
                   <TouchableOpacity style={s.btnWarning} onPress={handleClearMetrics}>
-                    <Trash2 size={16} color={colors.accent1} style={{ marginRight: 8 }} />
+                    <View style={{ marginRight: 8 }}>
+                      <Trash2 size={16} color={colors.accent1} />
+                    </View>
                     <Text style={s.btnWarningText}>Clear Metrics Only</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity style={s.btnWarning} onPress={handleClearMeals}>
-                    <Trash2 size={16} color={colors.accent1} style={{ marginRight: 8 }} />
+                    <View style={{ marginRight: 8 }}>
+                      <Trash2 size={16} color={colors.accent1} />
+                    </View>
                     <Text style={s.btnWarningText}>Clear Meals & Nutrition</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity style={s.btnWarning} onPress={handleClearChat}>
-                    <Trash2 size={16} color={colors.accent1} style={{ marginRight: 8 }} />
+                    <View style={{ marginRight: 8 }}>
+                      <Trash2 size={16} color={colors.accent1} />
+                    </View>
                     <Text style={s.btnWarningText}>Clear Chat History</Text>
                   </TouchableOpacity>
 
                   <View style={{ height: 12 }} />
 
                   <TouchableOpacity style={s.btnDanger} onPress={handleClearData}>
-                    <Trash2 size={18} color={colors.dangerText} style={{ marginRight: 8 }} />
+                    <View style={{ marginRight: 8 }}>
+                      <Trash2 size={18} color={colors.dangerText} />
+                    </View>
                     <Text style={s.btnDangerText}>Clear ALL Data</Text>
                   </TouchableOpacity>
               </View>

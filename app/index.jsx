@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, ScrollView } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { getAllSettings, getTodayTotal, getTodayNutritionTotals, getNutritionStreak } from '../src/db';
@@ -23,17 +23,43 @@ export default function HomeScreen() {
   const [quote, setQuote] = useState('');
   const [author, setAuthor] = useState('');
   const [fetchingQuote, setFetchingQuote] = useState(false);
+  const [quoteLoaded, setQuoteLoaded] = useState(false); // Track if quote has been loaded
 
   const [focusTotal, setFocusTotal] = useState(0);
   const [nutrition, setNutrition] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
   const [nutritionGoal, setNutritionGoal] = useState(2000);
   const [streak, setStreak] = useState({ currentStreak: 0, longestStreak: 0 });
 
-  useFocusEffect(() => {
-    loadData();
-  });
+  const fetchQuote = useCallback(async () => {
+    if (quoteLoaded) return; // Don't fetch if already loaded
+    
+    setFetchingQuote(true);
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
 
-  const loadData = async () => {
+      const res = await fetch('https://zenquotes.io/api/today', { signal: controller.signal });
+      clearTimeout(timeoutId);
+
+      if (!res.ok) throw new Error('API failed');
+      const data = await res.json();
+
+      if (data && data.length > 0) {
+        setQuote(data[0].q);
+        setAuthor(data[0].a);
+        setQuoteLoaded(true);
+      }
+    } catch (e) {
+      const random = FALLBACK_QUOTES[Math.floor(Math.random() * FALLBACK_QUOTES.length)];
+      setQuote(random);
+      setAuthor('Life-Log System');
+      setQuoteLoaded(true);
+    } finally {
+      setFetchingQuote(false);
+    }
+  }, [quoteLoaded]);
+
+  const loadData = useCallback(async () => {
     const settings = await getAllSettings();
     const username = settings.profile_username || 'Guest';
     setProfileName(username);
@@ -49,33 +75,17 @@ export default function HomeScreen() {
     const streakData = await getNutritionStreak(goal);
     setStreak(streakData);
 
-    if (!quote) fetchQuote();
-  };
-
-  const fetchQuote = async () => {
-    setFetchingQuote(true);
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
-
-      const res = await fetch('https://zenquotes.io/api/today', { signal: controller.signal });
-      clearTimeout(timeoutId);
-
-      if (!res.ok) throw new Error('API failed');
-      const data = await res.json();
-
-      if (data && data.length > 0) {
-        setQuote(data[0].q);
-        setAuthor(data[0].a);
-      }
-    } catch (e) {
-      const random = FALLBACK_QUOTES[Math.floor(Math.random() * FALLBACK_QUOTES.length)];
-      setQuote(random);
-      setAuthor('Life-Log System');
-    } finally {
-      setFetchingQuote(false);
+    // Only fetch quote once
+    if (!quoteLoaded && !quote) {
+      fetchQuote();
     }
-  };
+  }, [quoteLoaded, quote, fetchQuote]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   return (
     <ScreenLayout title="HOME">
