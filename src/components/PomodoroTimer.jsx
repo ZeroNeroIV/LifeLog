@@ -75,23 +75,17 @@ export default function PomodoroTimer({ onSessionComplete }) {
       timerRef.current = setInterval(() => {
         setTimeLeft((prev) => prev - 1);
       }, 1000);
+      
+      // Update notification every second with current time
+      updatePomodoroNotification(timeLeft, mode, activeProfile.name);
     } else if (isActive && timeLeft === 0) {
       handleComplete();
+    } else if (!isActive) {
+      clearPomodoroNotification();
     }
     
     return () => clearInterval(timerRef.current);
-  }, [isActive, timeLeft]);
-
-  // Separate effect for notification updates (only when timer starts/stops)
-  useEffect(() => {
-    if (isActive) {
-      // Update notification when timer starts
-      updatePomodoroNotification(timeLeft, mode, activeProfile.name);
-    } else {
-      // Clear notification when timer stops
-      clearPomodoroNotification();
-    }
-  }, [isActive]);
+  }, [isActive, timeLeft, mode, activeProfile.name]);
 
   const handleComplete = async () => {
     clearInterval(timerRef.current);
@@ -99,7 +93,12 @@ export default function PomodoroTimer({ onSessionComplete }) {
     clearPomodoroNotification();
 
     if (mode === 'work') {
-      workPlayer?.play();
+      try {
+        await workPlayer.seekTo(0);
+        await workPlayer.play();
+      } catch (e) {
+        console.log('[Audio] Error playing work sound:', e);
+      }
       await addLog('focus', activeProfile.work);
       if (onSessionComplete) onSessionComplete();
       
@@ -111,7 +110,12 @@ export default function PomodoroTimer({ onSessionComplete }) {
         setTimeLeft(Math.round(activeProfile.shortBreak * 60));
       }
     } else {
-      breakPlayer?.play();
+      try {
+        await breakPlayer.seekTo(0);
+        await breakPlayer.play();
+      } catch (e) {
+        console.log('[Audio] Error playing break sound:', e);
+      }
       if (mode === 'longBreak') {
          setCycle(1);
       } else {
@@ -123,10 +127,14 @@ export default function PomodoroTimer({ onSessionComplete }) {
   };
 
   const stopAudio = () => {
-    workPlayer?.pause();
-    breakPlayer?.pause();
-    workPlayer?.seekTo(0);
-    breakPlayer?.seekTo(0);
+    try {
+      workPlayer?.pause();
+      breakPlayer?.pause();
+      workPlayer?.seekTo(0);
+      breakPlayer?.seekTo(0);
+    } catch (e) {
+      console.log('[Audio] Error stopping audio:', e);
+    }
   };
 
   const toggleTimer = () => {
