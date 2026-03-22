@@ -1,11 +1,13 @@
 // src/components/NutritionChat.jsx - AI Chat Interface for Food Logging
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, ActivityIndicator, Animated } from 'react-native';
-import { Send, Check, X, Bot, AlertCircle, Mic, MicOff } from 'lucide-react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, ActivityIndicator, Animated, Alert } from 'react-native';
+import { Send, Check, X, Bot, AlertCircle, Mic, MicOff, RefreshCcw } from 'lucide-react-native';
 import { useSpeechRecognitionEvent, ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
 import { useTheme } from '../theme';
 import { initializeLLM, isLLMReady, processMessage, logFoodsFromResponse, getCurrentConversationId } from '../services/llm/NutritionLLMService';
 import { getConversationMessages } from '../db';
+
+const RESPONSE_TIMEOUT = 60000; // 60 second timeout for model response
 
 export default function NutritionChat({ modelReady, onFoodLogged }) {
   const { colors } = useTheme();
@@ -20,6 +22,8 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
   const [pendingFoods, setPendingFoods] = useState(null);
   const [streamingText, setStreamingText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [modelError, setModelError] = useState(null);
+  const timeoutRef = useRef(null);
   
   // Voice input state
   const [isListening, setIsListening] = useState(false);
@@ -194,12 +198,27 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
     setIsLoading(true);
     setIsTyping(true);
     setStreamingText('');
+    setModelError(null);
+
+    // Set timeout for model response
+    timeoutRef.current = setTimeout(() => {
+      if (isLoading) {
+        setModelError('Model is taking too long to respond. Try again with a simpler message.');
+        setIsLoading(false);
+        setIsTyping(false);
+        setStreamingText('');
+      }
+    }, RESPONSE_TIMEOUT);
 
     try {
+      let hasReceivedToken = false;
       const response = await processMessage(userMsg.content, (token) => {
-        setIsTyping(false); // Hide typing indicator once streaming starts
+        hasReceivedToken = true;
+        setIsTyping(false);
         setStreamingText(prev => prev + token);
       });
+
+      clearTimeout(timeoutRef.current);
 
       const assistantMsg = { id: (Date.now() + 1).toString(), role: 'assistant', content: response.text };
       setMessages(prev => [...prev, assistantMsg]);
@@ -210,10 +229,31 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
         setPendingFoods(response);
       }
     } catch (e) {
-      setMessages(prev => [...prev, { id: 'err-' + Date.now(), role: 'system', content: `Error: ${e.message}` }]);
+      clearTimeout(timeoutRef.current);
+      console.error('[Chat] Error:', e);
+      
+      // Show error message in chat
+      const errorMsg = { 
+        id: 'err-' + Date.now(), 
+        role: 'system', 
+        content: `Failed to get response: ${e.message || 'Unknown error'}. Please try again.`
+      };
+      setMessages(prev => [...prev, errorMsg]);
       setIsTyping(false);
+      setModelError(e.message || 'Model failed to respond');
     }
     setIsLoading(false);
+  };
+
+  const retryLastMessage = () => {
+    // Find the last user message and resend it
+    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    if (lastUserMsg) {
+      setInput(lastUserMsg.content);
+      // Remove the last error message
+      setMessages(prev => prev.filter(m => !m.id.startsWith('err-')));
+      setModelError(null);
+    }
   };
 
   const confirmFoods = async () => {
@@ -231,12 +271,19 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
   const renderMessage = ({ item }) => {
     const isUser = item.role === 'user';
     const isSystem = item.role === 'system';
+    const isError = item.id.startsWith('err-');
     
     return (
-      <View style={[s.msgContainer, isUser && s.msgUser, isSystem && s.msgSystem]}>
-        <Text style={[s.msgText, isUser && s.msgTextUser, isSystem && s.msgTextSystem]}>
+      <View style={[s.msgContainer, isUser && s.msgUser, isSystem && s.msgSystem, isError && s.msgError]}>
+        <Text style={[s.msgText, isUser && s.msgTextUser, isSystem && s.msgTextSystem, isError && s.msgTextError]}>
           {item.content}
         </Text>
+        {isError && (
+          <TouchableOpacity style={s.retryBtnSmall} onPress={retryLastMessage}>
+            <RefreshCcw size={12} color={colors.danger} />
+            <Text style={s.retryBtnSmallText}>Retry</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   };
@@ -408,9 +455,13 @@ const getStyles = (colors) => StyleSheet.create({
   msgContainer: { backgroundColor: colors.surface, borderRadius: 16, padding: 12, marginBottom: 8, maxWidth: '85%', alignSelf: 'flex-start', borderWidth: 1, borderColor: colors.surfaceBorder },
   msgUser: { backgroundColor: colors.primaryBg, alignSelf: 'flex-end', borderColor: colors.primary + '40' },
   msgSystem: { backgroundColor: colors.surfaceInput, alignSelf: 'center', maxWidth: '90%' },
+  msgError: { backgroundColor: colors.dangerBg, alignSelf: 'center', maxWidth: '90%', borderColor: colors.danger + '40' },
   msgText: { fontSize: 14, color: colors.text, lineHeight: 20 },
   msgTextUser: { color: colors.text },
   msgTextSystem: { color: colors.textMuted, fontSize: 13, textAlign: 'center' },
+  msgTextError: { color: colors.danger, fontSize: 13 },
+  retryBtnSmall: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: colors.dangerBg, borderRadius: 8 },
+  retryBtnSmallText: { fontSize: 12, fontWeight: '600', color: colors.danger },
   confirmBar: { backgroundColor: colors.surface, padding: 16, borderTopWidth: 1, borderTopColor: colors.surfaceBorder, maxHeight: 250 },
   confirmContent: { marginBottom: 12 },
   confirmTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 8 },
