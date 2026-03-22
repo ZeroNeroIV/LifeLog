@@ -7,7 +7,7 @@ import { useTheme } from '../theme';
 import { initializeLLM, isLLMReady, processMessage, logFoodsFromResponse, getCurrentConversationId } from '../services/llm/NutritionLLMService';
 import { getConversationMessages } from '../db';
 
-export default function NutritionChat({ modelReady }) {
+export default function NutritionChat({ modelReady, onFoodLogged }) {
   const { colors } = useTheme();
   const s = getStyles(colors);
   const flatListRef = useRef(null);
@@ -198,7 +198,8 @@ export default function NutritionChat({ modelReady }) {
     if (!pendingFoods) return;
     try {
       await logFoodsFromResponse(pendingFoods);
-      setMessages(prev => [...prev, { id: 'logged-' + Date.now(), role: 'system', content: 'Foods logged successfully!' }]);
+      setMessages(prev => [...prev, { id: 'logged-' + Date.now(), role: 'system', content: '✓ Foods logged successfully!' }]);
+      if (onFoodLogged) onFoodLogged(); // Refresh parent data
     } catch (e) {
       setMessages(prev => [...prev, { id: 'err-' + Date.now(), role: 'system', content: `Failed to log: ${e.message}` }]);
     }
@@ -276,13 +277,23 @@ export default function NutritionChat({ modelReady }) {
 
       {pendingFoods && (
         <View style={s.confirmBar}>
-          <Text style={s.confirmText}>Log {pendingFoods.foods.length} food(s)?</Text>
+          <View style={s.confirmContent}>
+            <Text style={s.confirmTitle}>Found {pendingFoods.foods.length} food item(s):</Text>
+            {pendingFoods.foods.map((food, idx) => (
+              <Text key={idx} style={s.confirmFoodItem}>
+                • {food.name}: {food.calories} cal (P:{food.protein_g}g C:{food.carbs_g}g F:{food.fat_g}g)
+              </Text>
+            ))}
+            <Text style={s.confirmAction}>Add to {pendingFoods.mealType} history?</Text>
+          </View>
           <View style={s.confirmBtns}>
-            <TouchableOpacity style={s.confirmBtn} onPress={confirmFoods}>
-              <Check size={18} color="#22c55e" />
+            <TouchableOpacity style={[s.confirmBtn, s.confirmBtnYes]} onPress={confirmFoods}>
+              <Check size={20} color="#fff" />
+              <Text style={s.confirmBtnText}>Log</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={s.confirmBtn} onPress={() => setPendingFoods(null)}>
-              <X size={18} color={colors.danger} />
+            <TouchableOpacity style={[s.confirmBtn, s.confirmBtnNo]} onPress={() => setPendingFoods(null)}>
+              <X size={20} color={colors.danger} />
+              <Text style={s.confirmBtnTextNo}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -365,10 +376,17 @@ const getStyles = (colors) => StyleSheet.create({
   msgText: { fontSize: 14, color: colors.text, lineHeight: 20 },
   msgTextUser: { color: colors.text },
   msgTextSystem: { color: colors.textMuted, fontSize: 13, textAlign: 'center' },
-  confirmBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: colors.surface, padding: 12, borderTopWidth: 1, borderTopColor: colors.surfaceBorder },
-  confirmText: { fontSize: 14, fontWeight: '600', color: colors.text },
+  confirmBar: { backgroundColor: colors.surface, padding: 16, borderTopWidth: 1, borderTopColor: colors.surfaceBorder, maxHeight: 250 },
+  confirmContent: { marginBottom: 12 },
+  confirmTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 8 },
+  confirmFoodItem: { fontSize: 13, color: colors.textMuted, lineHeight: 20, marginBottom: 4 },
+  confirmAction: { fontSize: 13, color: colors.primary, marginTop: 8, fontWeight: '600' },
   confirmBtns: { flexDirection: 'row', gap: 8 },
-  confirmBtn: { padding: 8, borderRadius: 8, backgroundColor: colors.surfaceInput },
+  confirmBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12 },
+  confirmBtnYes: { backgroundColor: colors.primary },
+  confirmBtnNo: { backgroundColor: colors.surfaceInput, borderWidth: 1, borderColor: colors.surfaceBorder },
+  confirmBtnText: { fontSize: 14, fontWeight: '700', color: colors.primaryText },
+  confirmBtnTextNo: { fontSize: 14, fontWeight: '700', color: colors.danger },
   inputBar: { flexDirection: 'row', alignItems: 'flex-end', padding: 12, gap: 8, borderTopWidth: 1, borderTopColor: colors.surfaceBorder, backgroundColor: colors.surface },
   input: { flex: 1, backgroundColor: colors.surfaceInput, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: colors.text, maxHeight: 100 },
   sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
