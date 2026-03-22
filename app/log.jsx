@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useFocusEffect } from 'expo-router';
-import { View, Text, StyleSheet, Platform, StatusBar, ScrollView, TouchableOpacity, Modal } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MessageSquare, List, Plus } from 'lucide-react-native';
+import { MessageSquare, Plus } from 'lucide-react-native';
 import { useTheme } from '../src/theme';
+import ScreenLayout from '../src/components/ScreenLayout';
 import ModelDownloadCard from '../src/components/ModelDownloadCard';
 import NutritionChat from '../src/components/NutritionChat';
 import MealHistoryCard from '../src/components/MealHistoryCard';
@@ -13,7 +14,7 @@ import FoodReportModal from '../src/components/FoodReportModal';
 import { getTodayNutritionTotals, getAllSettings } from '../src/db';
 
 export default function NutritionScreen() {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const s = getStyles(colors);
   const [modelReady, setModelReady] = useState(false);
   const [showManualEntry, setShowManualEntry] = useState(false);
@@ -57,13 +58,7 @@ export default function NutritionScreen() {
   };
 
   return (
-    <SafeAreaView style={s.safe}>
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.statusBar} />
-      
-      <View style={s.topBar}>
-        <Text style={s.appTitle}>NUTRITION</Text>
-      </View>
-
+    <ScreenLayout title="NUTRITION">
       <View style={s.summaryCard}>
         <View style={s.calorieRow}>
           <Text style={s.calorieValue}>{Math.round(todayTotals.calories)}</Text>
@@ -76,7 +71,7 @@ export default function NutritionScreen() {
         </View>
       </View>
 
-      <ScrollView style={s.content} contentContainerStyle={{ paddingBottom: 100 }}>
+      <ScrollView style={s.content}>
         {!modelReady && <View style={s.downloadSection}><ModelDownloadCard onModelReady={setModelReady} /></View>}
         <QuickFoodButtons onFoodAdded={loadData} />
         <MealHistoryCard onUpdate={loadData} refreshKey={refreshKey} />
@@ -116,14 +111,11 @@ export default function NutritionScreen() {
           <NutritionChat modelReady={modelReady} onFoodLogged={loadData} />
         </SafeAreaView>
       </Modal>
-    </SafeAreaView>
+    </ScreenLayout>
   );
 }
 
 const getStyles = (colors) => StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background, paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 },
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 56, borderBottomWidth: 1, borderBottomColor: colors.surfaceBorder, backgroundColor: colors.topBar },
-  appTitle: { color: colors.text, fontSize: 14, fontWeight: '800', letterSpacing: 2 },
   summaryCard: { backgroundColor: colors.surface, margin: 12, marginBottom: 0, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: colors.surfaceBorder },
   calorieRow: { flexDirection: 'row', alignItems: 'baseline', marginBottom: 12 },
   calorieValue: { fontSize: 36, fontWeight: '800', color: colors.primary },

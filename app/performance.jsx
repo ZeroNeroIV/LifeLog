@@ -1,13 +1,13 @@
 import React, { useState, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
-import { View, Text, StyleSheet, ScrollView, Platform, StatusBar } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import MetricsChart from '../src/components/MetricsChart';
 import NutritionChart from '../src/components/NutritionChart';
 import { useTheme } from '../src/theme';
+import ScreenLayout from '../src/components/ScreenLayout';
 
 export default function PerformanceScreen() {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const s = getStyles(colors);
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -19,13 +19,7 @@ export default function PerformanceScreen() {
   );
 
   return (
-    <SafeAreaView style={s.safe}>
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.statusBar} />
-      
-      <View style={s.topBar}>
-        <Text style={s.appTitle}>PERFORMANCE</Text>
-      </View>
-
+    <ScreenLayout title="PERFORMANCE">
       <ScrollView contentContainerStyle={s.scroll} showsVerticalScrollIndicator={false}>
         <View style={s.header}>
           <Text style={s.greeting}>Your Performance</Text>
@@ -74,15 +68,12 @@ export default function PerformanceScreen() {
           refreshKey={refreshKey}
         />
       </ScrollView>
-    </SafeAreaView>
+    </ScreenLayout>
   );
 }
 
 const getStyles = (colors) => StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background, paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 },
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 64, borderBottomWidth: 1, borderBottomColor: colors.surfaceBorder, backgroundColor: colors.topBar },
-  appTitle: { color: colors.text, fontSize: 16, fontWeight: '800', letterSpacing: 2 },
-  scroll: { padding: 24, paddingBottom: 100 },
+  scroll: { padding: 24 },
   header: { marginBottom: 32, marginTop: 8 },
   greeting: { fontSize: 32, fontWeight: '800', color: colors.text, letterSpacing: -1 },
   date: { fontSize: 14, color: colors.primary, marginTop: 6, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1 },

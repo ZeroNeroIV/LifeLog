@@ -19,12 +19,14 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
   const [initError, setInitError] = useState(null);
   const [pendingFoods, setPendingFoods] = useState(null);
   const [streamingText, setStreamingText] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
   
   // Voice input state
   const [isListening, setIsListening] = useState(false);
   const [voiceError, setVoiceError] = useState(null);
   const [partialResults, setPartialResults] = useState('');
   const pulseAnim = useRef(new Animated.Value(1)).current;
+  const typingAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (modelReady) initChat();
@@ -105,6 +107,22 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
     }
   }, [isListening, pulseAnim]);
 
+  // Typing indicator animation
+  useEffect(() => {
+    if (isTyping) {
+      const typing = Animated.loop(
+        Animated.sequence([
+          Animated.timing(typingAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+          Animated.timing(typingAnim, { toValue: 0, duration: 600, useNativeDriver: true }),
+        ])
+      );
+      typing.start();
+      return () => typing.stop();
+    } else {
+      typingAnim.setValue(0);
+    }
+  }, [isTyping, typingAnim]);
+
   const startListening = async () => {
     try {
       setVoiceError(null);
@@ -174,22 +192,26 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     setIsLoading(true);
+    setIsTyping(true);
     setStreamingText('');
 
     try {
       const response = await processMessage(userMsg.content, (token) => {
+        setIsTyping(false); // Hide typing indicator once streaming starts
         setStreamingText(prev => prev + token);
       });
 
       const assistantMsg = { id: (Date.now() + 1).toString(), role: 'assistant', content: response.text };
       setMessages(prev => [...prev, assistantMsg]);
       setStreamingText('');
+      setIsTyping(false);
 
       if (response.type === 'meal_log' && response.foods?.length) {
         setPendingFoods(response);
       }
     } catch (e) {
       setMessages(prev => [...prev, { id: 'err-' + Date.now(), role: 'system', content: `Error: ${e.message}` }]);
+      setIsTyping(false);
     }
     setIsLoading(false);
   };
@@ -268,11 +290,24 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
             <Text style={s.emptyChatHint}>e.g., "I had 2 eggs and toast for breakfast"</Text>
           </View>
         }
-        ListFooterComponent={streamingText ? (
-          <View style={s.msgContainer}>
-            <Text style={s.msgText}>{streamingText}</Text>
-          </View>
-        ) : null}
+        ListFooterComponent={
+          <>
+            {isTyping && (
+              <View style={[s.msgContainer, s.typingContainer]}>
+                <View style={s.typingDots}>
+                  <Animated.View style={[s.dot, { opacity: typingAnim.interpolate({ inputRange: [0, 0.33, 0.66, 1], outputRange: [0.3, 1, 0.3, 0.3] }) }]} />
+                  <Animated.View style={[s.dot, { opacity: typingAnim.interpolate({ inputRange: [0, 0.33, 0.66, 1], outputRange: [0.3, 0.3, 1, 0.3] }) }]} />
+                  <Animated.View style={[s.dot, { opacity: typingAnim.interpolate({ inputRange: [0, 0.33, 0.66, 1], outputRange: [0.3, 0.3, 0.3, 1] }) }]} />
+                </View>
+              </View>
+            )}
+            {streamingText && !isTyping ? (
+              <View style={s.msgContainer}>
+                <Text style={s.msgText}>{streamingText}</Text>
+              </View>
+            ) : null}
+          </>
+        }
       />
 
       {pendingFoods && (
@@ -398,4 +433,8 @@ const getStyles = (colors) => StyleSheet.create({
   voiceErrorText: { fontSize: 13, color: colors.danger, textAlign: 'center' },
   partialBar: { backgroundColor: colors.primaryBg, paddingHorizontal: 16, paddingVertical: 8, borderTopWidth: 1, borderTopColor: colors.primary + '40' },
   partialText: { fontSize: 13, color: colors.textMuted, fontStyle: 'italic' },
+  // Typing indicator styles
+  typingContainer: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16 },
+  typingDots: { flexDirection: 'row', gap: 6, alignItems: 'center' },
+  dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.text },
 });

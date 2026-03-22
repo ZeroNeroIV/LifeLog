@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Platform, StatusBar, ActivityIndicator, ScrollView } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, ActivityIndicator, ScrollView } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { getAllSettings, getTodayTotal, getTodayNutritionTotals, getNutritionStreak } from '../src/db';
 import { useTheme } from '../src/theme';
+import ScreenLayout from '../src/components/ScreenLayout';
 import BentoCard from '../src/components/BentoCard';
 import { Quote, Flame, Apple, Trophy } from 'lucide-react-native';
 
@@ -16,7 +16,7 @@ const FALLBACK_QUOTES = [
 ];
 
 export default function HomeScreen() {
-  const { colors, isDark } = useTheme();
+  const { colors } = useTheme();
   const s = getStyles(colors);
 
   const [profileName, setProfileName] = useState('Guest');
@@ -78,13 +78,7 @@ export default function HomeScreen() {
   };
 
   return (
-    <SafeAreaView style={s.safe}>
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.statusBar} />
-
-      <View style={s.topBar}>
-        <Text style={s.appTitle}>HOME</Text>
-      </View>
-
+    <ScreenLayout title="HOME">
       <ScrollView contentContainerStyle={s.container} showsVerticalScrollIndicator={false}>
         <View style={s.header}>
           <Text style={s.greeting}>Hello, {profileName} 👋</Text>
@@ -138,15 +132,12 @@ export default function HomeScreen() {
           </BentoCard>
         )}
       </ScrollView>
-    </SafeAreaView>
+    </ScreenLayout>
   );
 }
 
 const getStyles = (colors) => StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background, paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 },
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 64, borderBottomWidth: 1, borderBottomColor: colors.surfaceBorder, backgroundColor: colors.topBar },
-  appTitle: { color: colors.text, fontSize: 16, fontWeight: '800', letterSpacing: 2 },
-  container: { padding: 24, paddingBottom: 100 },
+  container: { padding: 24 },
   header: { marginBottom: 32, marginTop: 8 },
   greeting: { fontSize: 32, fontWeight: '800', color: colors.text, letterSpacing: -1 },
   date: { fontSize: 14, color: colors.primary, marginTop: 6, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase' },

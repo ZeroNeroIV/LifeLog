@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, Platform, StatusBar, TouchableOpacity, ScrollView, TextInput, Alert, KeyboardAvoidingView, Switch } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { View, Text, StyleSheet, Platform, TouchableOpacity, ScrollView, TextInput, Alert, KeyboardAvoidingView, Switch } from 'react-native';
 import { Bell, Droplets, Trash2, Save, AlertOctagon, Sun, Moon, User, Apple, Timer } from 'lucide-react-native';
 import BentoCard from '../src/components/BentoCard';
+import ScreenLayout from '../src/components/ScreenLayout';
 import { forceTestMoodCheck, scheduleNextMoodUnlockNotification } from '../src/notifications';
 import { getAllSettings, updateSetting, clearAllLogs } from '../src/db';
 import { getDB } from '../src/db';
@@ -155,11 +155,7 @@ export default function SettingsScreen() {
   };
 
   return (
-    <SafeAreaView style={s.safe}>
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.statusBar} />
-      <View style={s.topBar}>
-        <Text style={s.appTitle}>SETTINGS</Text>
-      </View>
+    <ScreenLayout title="SETTINGS">
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={s.container}>
           
@@ -336,15 +332,12 @@ export default function SettingsScreen() {
 
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </ScreenLayout>
   );
 }
 
 const getStyles = (colors) => StyleSheet.create({
-  safe: { flex: 1, backgroundColor: colors.background, paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 },
-  topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 64, borderBottomWidth: 1, borderBottomColor: colors.surfaceBorder, backgroundColor: colors.topBar },
-  appTitle: { color: colors.text, fontSize: 16, fontWeight: '800', letterSpacing: 2 },
-  container: { padding: 24, paddingBottom: 100 },
+  container: { padding: 24 },
   menuBox: { marginTop: 12 },
   menuText: { color: colors.textMuted, fontSize: 13, lineHeight: 20, marginBottom: 16 },
   
