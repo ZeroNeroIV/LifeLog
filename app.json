@@ -43,6 +43,15 @@
           "microphonePermission": "This app uses the microphone to record your voice for meal logging",
           "speechRecognitionPermission": "This app uses speech recognition to log your meals by voice"
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#7de9ff",
+          "defaultChannel": "default",
+          "sounds": []
+        }
       ]
     ],
     "extra": {

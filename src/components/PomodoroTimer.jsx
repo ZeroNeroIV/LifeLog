@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, KeyboardAvoidingView, ScrollView, Platform, Pressable, Alert } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { Play, Square, RefreshCcw, Coffee, Settings, X, Plus, CheckCircle2, Pencil, Trash2, BellOff } from 'lucide-react-native';
-import { useAudioPlayer } from 'expo-audio';
+import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 import { addLog, getSetting, updateSetting } from '../db';
 import { updatePomodoroNotification, clearPomodoroNotification } from '../notifications';
 import BentoCard from './BentoCard';
+import TooltipButton from './TooltipButton';
 import { useTheme } from '../theme';
 
 const DEFAULT_PROFILES = [
@@ -13,38 +14,57 @@ const DEFAULT_PROFILES = [
   { id: '2', name: 'Quick (20/5)', work: 20, shortBreak: 5, longBreak: 15, cycles: 3 },
 ];
 
+// Audio URLs - using reliable short alarm sounds
+const AUDIO_URLS = {
+  work: 'https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg',
+  break: 'https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg',
+};
+
+// Lazy audio initialization - outside component to avoid re-creation
+let _workPlayer = null;
+let _breakPlayer = null;
+let _audioInitialized = false;
+let _lastNotificationUpdate = 0;
+const NOTIFICATION_UPDATE_INTERVAL = 30000; // 30 seconds
+
+const initAudio = async () => {
+  if (_audioInitialized) return true;
+  try {
+    // Configure audio mode for iOS silent mode support
+    await setAudioModeAsync({
+      playsInSilentMode: true,
+      shouldPlayInBackground: true,
+    });
+    
+    // Create players with downloadFirst for reliable playback
+    _workPlayer = createAudioPlayer({
+      uri: AUDIO_URLS.work,
+      downloadFirst: true,
+    });
+    _breakPlayer = createAudioPlayer({
+      uri: AUDIO_URLS.break,
+      downloadFirst: true,
+    });
+    
+    _audioInitialized = true;
+    console.log('[Audio] Initialized successfully');
+    return true;
+  } catch (e) {
+    console.log('[Audio] Failed to initialize:', e);
+    return false;
+  }
+};
+
 export default function PomodoroTimer({ onSessionComplete }) {
   const { colors } = useTheme();
   const s = getStyles(colors);
-
-  // Audio players - use null initially to avoid blocking
-  const workPlayer = useAudioPlayer(null, { updateInterval: 0 });
-  const breakPlayer = useAudioPlayer(null, { updateInterval: 0 });
-  const [audioReady, setAudioReady] = useState(false);
-
-  // Load audio asynchronously without blocking UI
-  useEffect(() => {
-    const loadAudio = async () => {
-      try {
-        if (workPlayer && breakPlayer) {
-          workPlayer.replace('https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg');
-          breakPlayer.replace('https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg');
-          setAudioReady(true);
-        }
-      } catch (e) {
-        console.log('[Audio] Failed to load audio:', e);
-      }
-    };
-    
-    // Delay audio loading to not block initial render
-    const timeout = setTimeout(loadAudio, 500);
-    return () => clearTimeout(timeout);
-  }, [workPlayer, breakPlayer]);
 
   const [mode, setMode] = useState('work'); 
   const [cycle, setCycle] = useState(1);
   const [timeLeft, setTimeLeft] = useState(25 * 60);
   const [isActive, setIsActive] = useState(false);
+  const [audioReady, setAudioReady] = useState(false);
+  const [notificationsReady, setNotificationsReady] = useState(false);
   
   const [profiles, setProfiles] = useState(DEFAULT_PROFILES);
   const [activeProfileId, setActiveProfileId] = useState('1');
@@ -57,7 +77,29 @@ export default function PomodoroTimer({ onSessionComplete }) {
   
   const timerRef = useRef(null);
 
+  // Initialize audio and notifications on mount
   useEffect(() => {
+    const initializeFeatures = async () => {
+      // Initialize audio (non-blocking)
+      const audioSuccess = await initAudio();
+      setAudioReady(audioSuccess);
+      
+      // Check notification permissions
+      try {
+        const { status } = await Notifications.getPermissionsAsync();
+        setNotificationsReady(status === 'granted');
+        
+        if (status !== 'granted') {
+          const { status: newStatus } = await Notifications.requestPermissionsAsync();
+          setNotificationsReady(newStatus === 'granted');
+        }
+      } catch (e) {
+        console.log('[Notifications] Failed to check permissions:', e);
+        setNotificationsReady(false);
+      }
+    };
+    
+    initializeFeatures();
     loadSettings();
   }, []);
 
@@ -90,37 +132,51 @@ export default function PomodoroTimer({ onSessionComplete }) {
     }
   };
 
+  // Timer effect with throttled notification updates
   useEffect(() => {
     if (isActive && timeLeft > 0) {
       timerRef.current = setInterval(() => {
         setTimeLeft((prev) => prev - 1);
+        
+        // Update notification only every 30 seconds (throttled)
+        if (notificationsReady) {
+          const now = Date.now();
+          if (now - _lastNotificationUpdate >= NOTIFICATION_UPDATE_INTERVAL) {
+            updatePomodoroNotification(timeLeft, mode, activeProfile.name);
+            _lastNotificationUpdate = now;
+          }
+        }
       }, 1000);
-      
-      // Update notification every second with current time
-      updatePomodoroNotification(timeLeft, mode, activeProfile.name);
     } else if (isActive && timeLeft === 0) {
       handleComplete();
-    } else if (!isActive) {
+    } else if (!isActive && notificationsReady) {
       clearPomodoroNotification();
+      _lastNotificationUpdate = 0;
     }
     
     return () => clearInterval(timerRef.current);
-  }, [isActive, timeLeft, mode, activeProfile.name]);
+  }, [isActive, timeLeft, mode, activeProfile.name, notificationsReady]);
 
   const handleComplete = async () => {
     clearInterval(timerRef.current);
     setIsActive(false);
-    clearPomodoroNotification();
+    
+    if (notificationsReady) {
+      clearPomodoroNotification();
+      _lastNotificationUpdate = 0;
+    }
 
     if (mode === 'work') {
-      if (audioReady) {
+      // Play work completion sound
+      if (audioReady && _workPlayer) {
         try {
-          await workPlayer.seekTo(0);
-          await workPlayer.play();
+          _workPlayer.seekTo(0);
+          _workPlayer.play();
         } catch (e) {
           console.log('[Audio] Error playing work sound:', e);
         }
       }
+      
       await addLog('focus', activeProfile.work);
       if (onSessionComplete) onSessionComplete();
       
@@ -132,14 +188,16 @@ export default function PomodoroTimer({ onSessionComplete }) {
         setTimeLeft(Math.round(activeProfile.shortBreak * 60));
       }
     } else {
-      if (audioReady) {
+      // Play break completion sound
+      if (audioReady && _breakPlayer) {
         try {
-          await breakPlayer.seekTo(0);
-          await breakPlayer.play();
+          _breakPlayer.seekTo(0);
+          _breakPlayer.play();
         } catch (e) {
           console.log('[Audio] Error playing break sound:', e);
         }
       }
+      
       if (mode === 'longBreak') {
          setCycle(1);
       } else {
@@ -152,10 +210,10 @@ export default function PomodoroTimer({ onSessionComplete }) {
 
   const stopAudio = () => {
     try {
-      workPlayer?.pause();
-      breakPlayer?.pause();
-      workPlayer?.seekTo(0);
-      breakPlayer?.seekTo(0);
+      _workPlayer?.pause();
+      _breakPlayer?.pause();
+      _workPlayer?.seekTo(0);
+      _breakPlayer?.seekTo(0);
     } catch (e) {
       console.log('[Audio] Error stopping audio:', e);
     }
@@ -175,6 +233,8 @@ export default function PomodoroTimer({ onSessionComplete }) {
   };
 
   useEffect(() => {
+    if (!notificationsReady) return;
+    
     const subscription = Notifications.addNotificationResponseReceivedListener(response => {
       const actionId = response.actionIdentifier;
       if (actionId === 'PAUSE_TIMER') {
@@ -187,7 +247,7 @@ export default function PomodoroTimer({ onSessionComplete }) {
       }
     });
     return () => subscription.remove();
-  }, [activeProfile]);
+  }, [activeProfile, notificationsReady]);
 
   const runTest = () => {
     setIsActive(false);
@@ -277,14 +337,27 @@ export default function PomodoroTimer({ onSessionComplete }) {
             <TouchableOpacity style={[s.btn, { backgroundColor: colors.surfaceInput }]} onPress={resetTimer}>
               <RefreshCcw color={colors.textMuted} size={20} />
             </TouchableOpacity>
-            <TouchableOpacity style={[s.btn, { backgroundColor: colors.dangerBg }]} onPress={stopAudio}>
-              <BellOff color={colors.danger} size={20} />
-            </TouchableOpacity>
+            <TooltipButton
+              icon={<BellOff size={20} />}
+              onPress={stopAudio}
+              available={audioReady}
+              tooltipText="Audio unavailable"
+              size={50}
+              iconSize={20}
+              color={colors.dangerBg}
+              iconColor={colors.danger}
+            />
           </View>
 
           <TouchableOpacity style={s.testBtn} onPress={runTest}>
-            <Text style={s.testText}>Test Audio (5s)</Text>
+            <Text style={s.testText}>
+              {audioReady ? 'Test Audio (5s)' : 'Audio Unavailable'}
+            </Text>
           </TouchableOpacity>
+          
+          {!notificationsReady && (
+            <Text style={s.warningText}>Notifications disabled - Enable in settings</Text>
+          )}
         </View>
       </BentoCard>
 
@@ -380,6 +453,7 @@ const getStyles = (colors) => StyleSheet.create({
   btn: { width: 50, height: 50, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   testBtn: { marginTop: 20, backgroundColor: colors.dangerBg, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
   testText: { color: colors.danger, fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1 },
+  warningText: { fontSize: 11, color: colors.textDim, marginTop: 8, textAlign: 'center' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: colors.surface, borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: 40, maxHeight: '80%', borderTopWidth: 1, borderTopColor: colors.surfaceBorder },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 },
