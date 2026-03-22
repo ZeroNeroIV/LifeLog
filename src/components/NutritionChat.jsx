@@ -29,6 +29,7 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
   const [isListening, setIsListening] = useState(false);
   const [voiceError, setVoiceError] = useState(null);
   const [partialResults, setPartialResults] = useState('');
+  const [lastFinalTranscript, setLastFinalTranscript] = useState('');
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const typingAnim = useRef(new Animated.Value(0)).current;
 
@@ -40,47 +41,59 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
   useSpeechRecognitionEvent('start', () => {
     setIsListening(true);
     setVoiceError(null);
+    setLastFinalTranscript('');
   });
 
   useSpeechRecognitionEvent('end', () => {
+    // Save the last partial result as final text before clearing
+    setPartialResults(currentPartial => {
+      if (currentPartial && currentPartial.trim()) {
+        setInput(prev => prev ? `${prev} ${currentPartial.trim()}` : currentPartial.trim());
+      }
+      return '';
+    });
     setIsListening(false);
-    setPartialResults('');
   });
 
   useSpeechRecognitionEvent('result', (event) => {
     console.log('[STT Result Event]', JSON.stringify(event, null, 2));
     
-    // Try different possible structures from expo-speech-recognition
-    const results = event.results || event.transcripts;
+    // Handle different possible structures from expo-speech-recognition
+    let transcript = '';
+    let isFinal = false;
     
-    if (results && results.length > 0) {
-      const result = results[results.length - 1];
-      console.log('[STT Result]', JSON.stringify(result, null, 2));
-      
-      // Try different property names
-      const transcript = result.transcript || result.transcription || result.text;
-      const isFinal = result.isFinal !== undefined ? result.isFinal : result.final;
-      
-      console.log('[STT] Extracted:', { transcript, isFinal });
-      
-      if (transcript) {
-        if (isFinal) {
-          console.log('[STT] Adding final transcript:', transcript);
-          setInput(prev => {
-            const newValue = prev ? `${prev} ${transcript}` : transcript;
-            console.log('[STT] New input value:', newValue);
-            return newValue;
-          });
-          setPartialResults('');
-        } else {
-          console.log('[STT] Showing partial results:', transcript);
-          setPartialResults(transcript);
-        }
+    // Try array-based results (most common)
+    if (Array.isArray(event.results) && event.results.length > 0) {
+      const lastResult = event.results[event.results.length - 1];
+      transcript = lastResult.transcript || lastResult.transcription || lastResult.text || '';
+      isFinal = lastResult.isFinal !== undefined ? lastResult.isFinal : (lastResult.final !== undefined ? lastResult.final : false);
+    } 
+    // Try object-based results
+    else if (event.results && typeof event.results === 'object') {
+      transcript = event.results.transcript || event.results.transcription || event.results.text || '';
+      isFinal = event.results.isFinal !== undefined ? event.results.isFinal : false;
+    }
+    // Try direct transcript on event
+    else if (event.transcript) {
+      transcript = event.transcript;
+      isFinal = event.isFinal || false;
+    }
+    
+    console.log('[STT] Extracted:', { transcript, isFinal, length: transcript.length });
+    
+    if (transcript && transcript.trim()) {
+      if (isFinal) {
+        console.log('[STT] Adding final transcript to input:', transcript);
+        setInput(prev => {
+          const newValue = prev ? `${prev} ${transcript.trim()}` : transcript.trim();
+          console.log('[STT] New input value:', newValue);
+          return newValue;
+        });
+        setPartialResults('');
       } else {
-        console.log('[STT] No transcript found in result');
+        console.log('[STT] Showing partial results:', transcript);
+        setPartialResults(transcript);
       }
-    } else {
-      console.log('[STT] No results in event');
     }
   });
 
@@ -131,6 +144,7 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
     try {
       setVoiceError(null);
       setPartialResults('');
+      setLastFinalTranscript('');
       
       // Check/request permissions
       const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
@@ -323,7 +337,11 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
   }
 
   return (
-    <KeyboardAvoidingView style={s.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}>
+    <KeyboardAvoidingView 
+      style={s.container} 
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 90}
+    >
       <FlatList
         ref={flatListRef}
         data={messages}
