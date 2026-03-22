@@ -1,5 +1,5 @@
 // src/components/MealHistoryCard.jsx - Today's Meals List
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { ChevronDown, ChevronUp, Trash2, Utensils, Cookie } from 'lucide-react-native';
@@ -9,7 +9,7 @@ import * as Haptics from 'expo-haptics';
 
 export default function MealHistoryCard({ onUpdate, refreshKey }) {
   const { colors } = useTheme();
-  const s = getStyles(colors);
+  const s = useMemo(() => getStyles(colors), [colors]);
   const [meals, setMeals] = useState([]);
   const [expanded, setExpanded] = useState({});
 

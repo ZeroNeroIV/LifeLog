@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef, useMemo } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, ScrollView } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { getAllSettings, getTodayTotal, getTodayNutritionTotals, getNutritionStreak } from '../src/db';
@@ -17,13 +17,14 @@ const FALLBACK_QUOTES = [
 
 export default function HomeScreen() {
   const { colors } = useTheme();
-  const s = getStyles(colors);
+  const s = useMemo(() => getStyles(colors), [colors]);
 
   const [profileName, setProfileName] = useState('Guest');
   const [quote, setQuote] = useState('');
   const [author, setAuthor] = useState('');
   const [fetchingQuote, setFetchingQuote] = useState(false);
   const [quoteLoaded, setQuoteLoaded] = useState(false); // Track if quote has been loaded
+  const quoteLoadedRef = useRef(false);
 
   const [focusTotal, setFocusTotal] = useState(0);
   const [nutrition, setNutrition] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
@@ -48,38 +49,44 @@ export default function HomeScreen() {
         setQuote(data[0].q);
         setAuthor(data[0].a);
         setQuoteLoaded(true);
+        quoteLoadedRef.current = true;
       }
     } catch (e) {
       const random = FALLBACK_QUOTES[Math.floor(Math.random() * FALLBACK_QUOTES.length)];
       setQuote(random);
       setAuthor('Life-Log System');
       setQuoteLoaded(true);
+      quoteLoadedRef.current = true;
     } finally {
       setFetchingQuote(false);
     }
   }, [quoteLoaded]);
 
   const loadData = useCallback(async () => {
-    const settings = await getAllSettings();
-    const username = settings.profile_username || 'Guest';
-    setProfileName(username);
-    const goal = parseInt(settings.nutrition_calorie_goal) || 2000;
-    setNutritionGoal(goal);
+    try {
+      const settings = await getAllSettings();
+      const username = settings.profile_username || 'Guest';
+      setProfileName(username);
+      const goal = parseInt(settings.nutrition_calorie_goal) || 2000;
+      setNutritionGoal(goal);
 
-    const focus = await getTodayTotal('focus');
-    setFocusTotal(focus);
+      const focus = await getTodayTotal('focus');
+      setFocusTotal(focus);
 
-    const nutri = await getTodayNutritionTotals();
-    setNutrition(nutri);
+      const nutri = await getTodayNutritionTotals();
+      setNutrition(nutri);
 
-    const streakData = await getNutritionStreak(goal);
-    setStreak(streakData);
+      const streakData = await getNutritionStreak(goal);
+      setStreak(streakData);
 
-    // Only fetch quote once
-    if (!quoteLoaded && !quote) {
-      fetchQuote();
+      // Only fetch quote once
+      if (!quoteLoadedRef.current) {
+        fetchQuote();
+      }
+    } catch (e) {
+      console.error('Failed to load home data:', e);
     }
-  }, [quoteLoaded, quote, fetchQuote]);
+  }, [fetchQuote]);
 
   useFocusEffect(
     useCallback(() => {

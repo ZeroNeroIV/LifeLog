@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,9 +13,24 @@ import QuickFoodButtons from '../src/components/QuickFoodButtons';
 import FoodReportModal from '../src/components/FoodReportModal';
 import { getTodayNutritionTotals, getAllSettings } from '../src/db';
 
+function MacroBar({ label, value, goal, color, styles }) {
+  const pct = Math.min((value / goal) * 100, 100);
+  return (
+    <View style={styles.macroItem}>
+      <View style={styles.macroHeader}>
+        <Text style={styles.macroLabel}>{label}</Text>
+        <Text style={styles.macroValue}>{Math.round(value)}/{goal}</Text>
+      </View>
+      <View style={styles.macroBarBg}>
+        <View style={[styles.macroBar, { width: `${pct}%`, backgroundColor: color }]} />
+      </View>
+    </View>
+  );
+}
+
 export default function NutritionScreen() {
   const { colors } = useTheme();
-  const s = getStyles(colors);
+  const s = useMemo(() => getStyles(colors), [colors]);
   const [modelReady, setModelReady] = useState(false);
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [showChat, setShowChat] = useState(false);
@@ -25,11 +40,7 @@ export default function NutritionScreen() {
   const [goals, setGoals] = useState({ calories: 2000, protein: 50, carbs: 250, fat: 65, fiber: 30 });
   const [refreshKey, setRefreshKey] = useState(0);
 
-  useFocusEffect(() => {
-    loadData();
-  });
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     const [totals, settings] = await Promise.all([getTodayNutritionTotals(), getAllSettings()]);
     setTodayTotals(totals);
     setGoals({
@@ -40,22 +51,9 @@ export default function NutritionScreen() {
       fiber: parseInt(settings.nutrition_fiber_goal) || 30,
     });
     setRefreshKey(prev => prev + 1);
-  };
+  }, []);
 
-  const MacroBar = ({ label, value, goal, color }) => {
-    const pct = Math.min((value / goal) * 100, 100);
-    return (
-      <View style={s.macroItem}>
-        <View style={s.macroHeader}>
-          <Text style={s.macroLabel}>{label}</Text>
-          <Text style={s.macroValue}>{Math.round(value)}/{goal}</Text>
-        </View>
-        <View style={s.macroBarBg}>
-          <View style={[s.macroBar, { width: `${pct}%`, backgroundColor: color }]} />
-        </View>
-      </View>
-    );
-  };
+  useFocusEffect(useCallback(() => { loadData(); }, [loadData]));
 
   return (
     <ScreenLayout title="NUTRITION">
@@ -65,9 +63,9 @@ export default function NutritionScreen() {
           <Text style={s.calorieLabel}>/ {goals.calories} cal</Text>
         </View>
         <View style={s.macrosRow}>
-          <MacroBar label="Protein" value={todayTotals.protein} goal={goals.protein} color="#22c55e" />
-          <MacroBar label="Carbs" value={todayTotals.carbs} goal={goals.carbs} color="#f59e0b" />
-          <MacroBar label="Fat" value={todayTotals.fat} goal={goals.fat} color="#ef4444" />
+          <MacroBar label="Protein" value={todayTotals.protein} goal={goals.protein} color="#22c55e" styles={s} />
+          <MacroBar label="Carbs" value={todayTotals.carbs} goal={goals.carbs} color="#f59e0b" styles={s} />
+          <MacroBar label="Fat" value={todayTotals.fat} goal={goals.fat} color="#ef4444" styles={s} />
         </View>
       </View>
 

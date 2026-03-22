@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Smile, Lock } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -17,7 +17,7 @@ const MOODS = [
 
 export default function MoodBentoCard() {
   const { colors } = useTheme();
-  const s = getStyles(colors);
+  const s = useMemo(() => getStyles(colors), [colors]);
   
   const [todaysLogs, setTodaysLogs] = useState([]);
   const [selectedMood, setSelectedMood] = useState(null);
@@ -25,11 +25,14 @@ export default function MoodBentoCard() {
 
   useEffect(() => {
     loadMoods();
-    const interval = setInterval(() => {
-       setNow(Math.floor(Date.now() / 1000));
-    }, 10000); // 10s JS sync to smoothly unwrap 1H bounds
-    return () => clearInterval(interval);
-  }, []);
+    let interval;
+    if (latestMood && now - latestMood.timestamp < 3600) {
+      interval = setInterval(() => {
+        setNow(Math.floor(Date.now() / 1000));
+      }, 10000);
+    }
+    return () => { if (interval) clearInterval(interval); };
+  }, [latestMood?.timestamp]);
 
   const loadMoods = async () => {
     const logs = await getTodayLogs('mood');

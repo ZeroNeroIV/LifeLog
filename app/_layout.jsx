@@ -1,12 +1,35 @@
-import { useEffect, useState } from 'react';
-import { Stack, Tabs } from 'expo-router';
-import { Home, UtensilsCrossed, Activity, Timer, Settings, Monitor } from 'lucide-react-native';
+import { useEffect, useState, Component } from 'react';
+import { Stack, Tabs } from 'expo-router';import { Home, UtensilsCrossed, Activity, Timer, Settings, Monitor } from 'lucide-react-native';
 import { StatusBar } from 'expo-status-bar';
 import { View, Text, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { initializeDB, addLog } from '../src/db';
 import { initNotifications } from '../src/notifications';
 import { ThemeProvider, useTheme } from '../src/theme';
+
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, info) {
+    console.error('[LifeLog] ErrorBoundary:', error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={styles.center}>
+          <Text style={styles.errorTitle}>Something went wrong</Text>
+          <Text style={styles.errorBody}>{this.state.error?.message || 'Unknown error'}</Text>
+        </View>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function MainTabs() {
   const { colors, isDark } = useTheme();
@@ -85,11 +108,13 @@ export default function RootLayout() {
   }
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <ThemeProvider>
-        <MainTabs />
-      </ThemeProvider>
-    </GestureHandlerRootView>
+    <ErrorBoundary>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <ThemeProvider>
+          <MainTabs />
+        </ThemeProvider>
+      </GestureHandlerRootView>
+    </ErrorBoundary>
   );
 }
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, KeyboardAvoidingView, Platform, Pressable, FlatList, ActivityIndicator } from 'react-native';
 import { Coffee, Plus, Search, X, ChevronLeft } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -11,7 +11,7 @@ const COMMON_DRINKS = ['Espresso', 'Filter Coffee', 'Green Tea', 'Orange Juice',
 
 export default function DrinksBentoCard() {
   const { colors } = useTheme();
-  const s = getStyles(colors);
+  const s = useMemo(() => getStyles(colors), [colors]);
 
   const [modalVisible, setModalVisible] = useState(false);
   const [query, setQuery] = useState('');
@@ -28,9 +28,15 @@ export default function DrinksBentoCard() {
     }
     const delay = setTimeout(async () => {
       setLoading(true);
-      const data = await searchDrinks(query);
-      setResults(data);
-      setLoading(false);
+      try {
+        const data = await searchDrinks(query);
+        setResults(data);
+      } catch (err) {
+        console.warn('Drink search failed:', err);
+        setResults([]);
+      } finally {
+        setLoading(false);
+      }
     }, 600);
     return () => clearTimeout(delay);
   }, [query]);

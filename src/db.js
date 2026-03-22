@@ -13,15 +13,23 @@ import * as SQLite from "expo-sqlite";
 
 /** @type {SQLite.SQLiteDatabase | null} */
 let _db = null;
+let _dbPromise = null;
 
 /**
  * Return the open database handle, opening (and bootstrapping) it on first call.
+ * Uses a promise-based singleton to prevent concurrent open attempts.
  * @returns {Promise<SQLite.SQLiteDatabase>}
  */
 export const getDB = async () => {
   if (_db) return _db;
-  _db = await SQLite.openDatabaseAsync("lifelog.db");
-  await _bootstrapSchema(_db);
+  if (!_dbPromise) {
+    _dbPromise = (async () => {
+      const db = await SQLite.openDatabaseAsync("lifelog.db");
+      await _bootstrapSchema(db);
+      return db;
+    })();
+  }
+  _db = await _dbPromise;
   return _db;
 };
 
@@ -108,54 +116,51 @@ const _bootstrapSchema = async (db) => {
   }
 
   // ── Migration: v0 → v1 ───────────────────────────────────────────────────
-  // Drops any partial/corrupt tables left by a previous failed init attempt,
-  // then creates the full schema from scratch.
+  // Only run for fresh installs (v=0). For existing v1 installs, skip to v2.
+  if (installedVersion < 1) {
+    await db.execAsync("DROP INDEX IF EXISTS idx_logs_type_ts;");
+    await db.execAsync("DROP TABLE IF EXISTS logs;");
+    await db.execAsync("DROP TABLE IF EXISTS settings;");
 
-  await db.execAsync("DROP INDEX IF EXISTS idx_logs_type_ts;");
-  await db.execAsync("DROP TABLE IF EXISTS logs;");
-  await db.execAsync("DROP TABLE IF EXISTS settings;");
-
-  // logs: one row per metric event
-  //   type  = 'water' | 'caffeine' | 'mood' | 'focus' | 'vitamin_c' | 'sugar'
-  //   value = mL      | mg         | 1-5    | minutes | mg          | g
-  await db.execAsync(
-    `CREATE TABLE logs (
-      id        INTEGER PRIMARY KEY AUTOINCREMENT,
-      type      TEXT    NOT NULL,
-      value     REAL    NOT NULL,
-      timestamp INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
-    );`,
-  );
-
-  // Composite index for fast type + time-range queries
-  await db.execAsync(
-    `CREATE INDEX idx_logs_type_ts ON logs (type, timestamp);`,
-  );
-
-  // settings: simple key-value store, values always stored as TEXT
-  await db.execAsync(
-    `CREATE TABLE settings (
-      key   TEXT PRIMARY KEY NOT NULL,
-      value TEXT NOT NULL
-    );`,
-  );
-
-  // Seed default settings – INSERT OR IGNORE is safe to repeat
-  for (const [key, value] of DEFAULT_SETTINGS) {
-    await db.runAsync(
-      "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?);",
-      [key, value],
+    // logs: one row per metric event
+    //   type  = 'water' | 'caffeine' | 'mood' | 'focus' | 'vitamin_c' | 'sugar'
+    //   value = mL      | mg         | 1-5    | minutes | mg          | g
+    await db.execAsync(
+      `CREATE TABLE logs (
+        id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        type      TEXT    NOT NULL,
+        value     REAL    NOT NULL,
+        timestamp INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+      );`,
     );
+
+    // Composite index for fast type + time-range queries
+    await db.execAsync(
+      `CREATE INDEX idx_logs_type_ts ON logs (type, timestamp);`,
+    );
+
+    // settings: simple key-value store, values always stored as TEXT
+    await db.execAsync(
+      `CREATE TABLE settings (
+        key   TEXT PRIMARY KEY NOT NULL,
+        value TEXT NOT NULL
+      );`,
+    );
+
+    // Seed default settings – INSERT OR IGNORE is safe to repeat
+    for (const [key, value] of DEFAULT_SETTINGS) {
+      await db.runAsync(
+        "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?);",
+        [key, value],
+      );
+    }
+
+    await db.execAsync("PRAGMA user_version = 1;");
   }
 
-  // Stamp v1 so incremental v2 migration can detect it
-  await db.execAsync("PRAGMA user_version = 1;");
-
-  // ── Migration: v1 → v2 ───────────────────────────────────────────────────
-  // Fall through to v2 migration for fresh installs
-
   // ── Migration: v1 → v2 (Nutrition AI Feature) ────────────────────────────
-  // Adds tables for meals, AI chat, and food reporting
+  // Adds tables for meals, AI chat, and food reporting.
+  // Runs for both fresh installs (v=0, now stamped v=1 above) and existing v1 installs.
 
   // meals: Container for meal/snack entries
   await db.execAsync(
@@ -383,17 +388,17 @@ export const clearAllLogs = async () => {
     // Clear logs (water, caffeine, mood, focus, etc.)
     await db.runAsync("DELETE FROM logs;");
     
-    // Clear nutrition data
-    await db.runAsync("DELETE FROM foods;");  // This will cascade to meals via foreign key
+    // Clear nutrition data (delete meal_foods first due to FK, then meals)
+    await db.runAsync("DELETE FROM meal_foods;");
     await db.runAsync("DELETE FROM meals;");
-    await db.runAsync("DELETE FROM nutrition;");
+    await db.runAsync("DELETE FROM food_reports;");
     
     // Clear conversation history
-    await db.runAsync("DELETE FROM conversation_messages;");
-    await db.runAsync("DELETE FROM conversations;");
+    await db.runAsync("DELETE FROM ai_messages;");
+    await db.runAsync("DELETE FROM ai_conversations;");
     
     // Reset SQLite sequence counters for auto-increment IDs
-    await db.runAsync("DELETE FROM sqlite_sequence WHERE name IN ('logs', 'meals', 'foods', 'nutrition', 'conversations', 'conversation_messages');");
+    await db.runAsync("DELETE FROM sqlite_sequence WHERE name IN ('logs', 'meals', 'meal_foods', 'food_reports', 'ai_conversations', 'ai_messages');");
   });
 };
 
@@ -553,20 +558,48 @@ export const getTodayMeals = async () => {
     new Date(new Date().setHours(0, 0, 0, 0)).getTime() / 1000,
   );
   
-  const meals = await db.getAllAsync(
-    `SELECT * FROM meals WHERE timestamp >= ? ORDER BY timestamp DESC;`,
+  // Single JOIN query instead of N+1 per-meal queries
+  const rows = await db.getAllAsync(
+    `SELECT 
+       m.id AS meal_id, m.type AS meal_type, m.timestamp AS meal_timestamp, m.notes,
+       mf.id AS food_id, mf.fdc_id, mf.name AS food_name, mf.calories, 
+       mf.protein_g, mf.carbs_g, mf.fat_g, mf.fiber_g, mf.quantity_g, mf.source
+     FROM meals m
+     LEFT JOIN meal_foods mf ON m.id = mf.meal_id
+     WHERE m.timestamp >= ?
+     ORDER BY m.timestamp DESC, mf.id ASC;`,
     [startOfDay],
   );
-  
-  // Fetch foods for each meal
-  for (const meal of meals) {
-    meal.foods = await db.getAllAsync(
-      "SELECT * FROM meal_foods WHERE meal_id = ? ORDER BY id ASC;",
-      [meal.id],
-    );
+
+  // Group foods by meal
+  const mealsMap = new Map();
+  for (const row of rows) {
+    if (!mealsMap.has(row.meal_id)) {
+      mealsMap.set(row.meal_id, {
+        id: row.meal_id,
+        type: row.meal_type,
+        timestamp: row.meal_timestamp,
+        notes: row.notes,
+        foods: [],
+      });
+    }
+    if (row.food_id) {
+      mealsMap.get(row.meal_id).foods.push({
+        id: row.food_id,
+        fdc_id: row.fdc_id,
+        name: row.food_name,
+        calories: row.calories,
+        protein_g: row.protein_g,
+        carbs_g: row.carbs_g,
+        fat_g: row.fat_g,
+        fiber_g: row.fiber_g,
+        quantity_g: row.quantity_g,
+        source: row.source,
+      });
+    }
   }
-  
-  return meals;
+
+  return Array.from(mealsMap.values());
 };
 
 /**

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { View, Text, StyleSheet, Platform, TouchableOpacity, ScrollView, TextInput, Alert, KeyboardAvoidingView, Switch } from 'react-native';
 import { Bell, Droplets, Trash2, Save, AlertOctagon, Sun, Moon, User, Apple, Timer } from 'lucide-react-native';
 import BentoCard from '../src/components/BentoCard';
@@ -11,7 +11,7 @@ import { useTheme } from '../src/theme';
 
 export default function SettingsScreen() {
   const { colors, isDark, toggleTheme } = useTheme();
-  const s = getStyles(colors);
+  const s = useMemo(() => getStyles(colors), [colors]);
   
   const [settings, setSettings] = useState({ 
     water_fav1_ml: '250', water_fav2_ml: '500',
@@ -32,17 +32,19 @@ export default function SettingsScreen() {
 
   const saveSettings = async () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    await updateSetting('water_fav1_ml', settings.water_fav1_ml || '250');
-    await updateSetting('water_fav2_ml', settings.water_fav2_ml || '500');
-    await updateSetting('profile_fullname', settings.profile_fullname || '');
-    await updateSetting('profile_username', settings.profile_username || '');
-    await updateSetting('profile_email', settings.profile_email || '');
-    await updateSetting('nutrition_calorie_goal', settings.nutrition_calorie_goal || '2000');
-    await updateSetting('nutrition_protein_goal', settings.nutrition_protein_goal || '50');
-    await updateSetting('nutrition_carbs_goal', settings.nutrition_carbs_goal || '250');
-    await updateSetting('nutrition_fat_goal', settings.nutrition_fat_goal || '65');
-    await updateSetting('nutrition_fiber_goal', settings.nutrition_fiber_goal || '30');
-    // Pomodoro settings are saved separately by the timer component
+    const db = await getDB();
+    await db.withTransactionAsync(async () => {
+      await updateSetting('water_fav1_ml', settings.water_fav1_ml || '250');
+      await updateSetting('water_fav2_ml', settings.water_fav2_ml || '500');
+      await updateSetting('profile_fullname', settings.profile_fullname || '');
+      await updateSetting('profile_username', settings.profile_username || '');
+      await updateSetting('profile_email', settings.profile_email || '');
+      await updateSetting('nutrition_calorie_goal', settings.nutrition_calorie_goal || '2000');
+      await updateSetting('nutrition_protein_goal', settings.nutrition_protein_goal || '50');
+      await updateSetting('nutrition_carbs_goal', settings.nutrition_carbs_goal || '250');
+      await updateSetting('nutrition_fat_goal', settings.nutrition_fat_goal || '65');
+      await updateSetting('nutrition_fiber_goal', settings.nutrition_fiber_goal || '30');
+    });
     Alert.alert("Saved", "Settings have been updated!");
   };
 
@@ -251,19 +253,27 @@ export default function SettingsScreen() {
                   <Text style={s.menuText}>
                     Pomodoro profiles are managed in the Focus tab. Your current profiles are persisted automatically.
                   </Text>
-                  {settings.pomodoro_profiles && (
-                    <View style={s.profilesContainer}>
-                      <Text style={s.label}>Active Profiles ({JSON.parse(settings.pomodoro_profiles || '[]').length})</Text>
-                      {JSON.parse(settings.pomodoro_profiles).map((profile, idx) => (
-                        <View key={idx} style={s.profileItem}>
-                          <Text style={s.profileName}>{profile.name}</Text>
-                          <Text style={s.profileDetails}>
-                            {profile.work}m work / {profile.shortBreak}m short / {profile.longBreak}m long
-                          </Text>
+                  {settings.pomodoro_profiles && (() => {
+                    try {
+                      const profiles = JSON.parse(settings.pomodoro_profiles || '[]');
+                      if (!profiles.length) return null;
+                      return (
+                        <View style={s.profilesContainer}>
+                          <Text style={s.label}>Active Profiles ({profiles.length})</Text>
+                          {profiles.map((profile, idx) => (
+                            <View key={idx} style={s.profileItem}>
+                              <Text style={s.profileName}>{profile.name}</Text>
+                              <Text style={s.profileDetails}>
+                                {profile.work}m work / {profile.shortBreak}m short / {profile.longBreak}m long
+                              </Text>
+                            </View>
+                          ))}
                         </View>
-                      ))}
-                    </View>
-                  )}
+                      );
+                    } catch {
+                      return null;
+                    }
+                  })()}
               </View>
           </BentoCard>
 

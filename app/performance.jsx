@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import MetricsChart from '../src/components/MetricsChart';
@@ -8,7 +8,7 @@ import ScreenLayout from '../src/components/ScreenLayout';
 
 export default function PerformanceScreen() {
   const { colors } = useTheme();
-  const s = getStyles(colors);
+  const s = useMemo(() => getStyles(colors), [colors]);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useFocusEffect(

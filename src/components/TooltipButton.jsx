@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Animated } from 'react-native';
 import { useTheme } from '../theme';
 
@@ -15,8 +15,15 @@ export default function TooltipButton({
   const { colors } = useTheme();
   const [showTooltip, setShowTooltip] = useState(false);
   const tooltipAnim = useRef(new Animated.Value(0)).current;
+  const hideTimeoutRef = useRef(null);
   const btnColor = color || colors.primary;
   const finalIconColor = iconColor || (available ? colors.primary : colors.textDim);
+
+  useEffect(() => {
+    return () => {
+      if (hideTimeoutRef.current) clearTimeout(hideTimeoutRef.current);
+    };
+  }, []);
 
   const showTooltipAnimated = () => {
     setShowTooltip(true);
@@ -26,7 +33,7 @@ export default function TooltipButton({
       useNativeDriver: true,
     }).start(() => {
       // Auto-hide after 2 seconds
-      setTimeout(() => {
+      hideTimeoutRef.current = setTimeout(() => {
         Animated.timing(tooltipAnim, {
           toValue: 0,
           duration: 200,

@@ -4,7 +4,7 @@
 
 import { initLlama } from "llama.rn";
 import { getModelInfo } from "./modelDownload";
-import { searchFood } from "../nutritionApi";
+import { searchDrinks as searchFood } from "../nutritionApi";
 import {
   createMeal, addFoodToMeal, createConversation, addMessage,
   getConversationMessages, getLatestConversation, updateConversationSummary,
