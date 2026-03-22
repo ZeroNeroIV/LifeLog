@@ -42,16 +42,39 @@ export default function NutritionChat({ modelReady }) {
   });
 
   useSpeechRecognitionEvent('result', (event) => {
-    if (event.results && event.results.length > 0) {
-      const result = event.results[event.results.length - 1];
-      if (result.transcript) {
-        if (result.isFinal) {
-          setInput(prev => prev ? `${prev} ${result.transcript}` : result.transcript);
+    console.log('[STT Result Event]', JSON.stringify(event, null, 2));
+    
+    // Try different possible structures from expo-speech-recognition
+    const results = event.results || event.transcripts;
+    
+    if (results && results.length > 0) {
+      const result = results[results.length - 1];
+      console.log('[STT Result]', JSON.stringify(result, null, 2));
+      
+      // Try different property names
+      const transcript = result.transcript || result.transcription || result.text;
+      const isFinal = result.isFinal !== undefined ? result.isFinal : result.final;
+      
+      console.log('[STT] Extracted:', { transcript, isFinal });
+      
+      if (transcript) {
+        if (isFinal) {
+          console.log('[STT] Adding final transcript:', transcript);
+          setInput(prev => {
+            const newValue = prev ? `${prev} ${transcript}` : transcript;
+            console.log('[STT] New input value:', newValue);
+            return newValue;
+          });
           setPartialResults('');
         } else {
-          setPartialResults(result.transcript);
+          console.log('[STT] Showing partial results:', transcript);
+          setPartialResults(transcript);
         }
+      } else {
+        console.log('[STT] No transcript found in result');
       }
+    } else {
+      console.log('[STT] No results in event');
     }
   });
 
