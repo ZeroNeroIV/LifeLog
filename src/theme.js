@@ -22,6 +22,10 @@ export const THEMES = {
     accent2: '#ddb7ff',
     accent2Bg: '#ddb7ff40',
     accent2Text: '#2b0051',
+    vitaminC: '#fb923c',
+    vitaminCBg: '#fb923c20',
+    sugar: '#ec4899',
+    sugarBg: '#ec489920',
     danger: '#ff716c',
     dangerBg: '#ff716c20',
     dangerText: '#4a0002'
@@ -45,6 +49,10 @@ export const THEMES = {
     accent2: '#7e22ce',
     accent2Bg: '#f3e8ff',
     accent2Text: '#3b0764',
+    vitaminC: '#ea580c',
+    vitaminCBg: '#ffedd5',
+    sugar: '#db2777',
+    sugarBg: '#fce7f3',
     danger: '#e11d48',
     dangerBg: '#ffe4e6',
     dangerText: '#881337'

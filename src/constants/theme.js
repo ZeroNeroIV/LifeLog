@@ -38,6 +38,14 @@ export const COLORS = {
   focusLight:    '#86efac', // green-300
   focusDim:      '#052e16', // green-950 tint
 
+  vitaminC:      '#fb923c', // orange-400 (vitamin C)
+  vitaminCLight: '#fdba74', // orange-300
+  vitaminCDim:   '#431407', // orange-950 tint
+
+  sugar:         '#ec4899', // pink-500 (sugar)
+  sugarLight:    '#f9a8d4', // pink-300
+  sugarDim:      '#500724', // pink-950 tint
+
   // ── Semantic states ──────────────────────────────────────────
   success:       '#22c55e',
   warning:       '#f59e0b',
@@ -60,6 +68,8 @@ export const GRADIENTS = {
   caffeine: ['#b45309', '#f59e0b'],  // amber
   mood:     ['#7e22ce', '#a855f7'],  // purple
   focus:    ['#15803d', '#22c55e'],  // green
+  vitaminC: ['#c2410c', '#fb923c'],  // orange
+  sugar:    ['#be185d', '#ec4899'],  // pink
   surface:  ['#1e293b', '#0f172a'],  // dark surface fade
   hero:     ['#1e293b', '#0f172a'],  // for header backgrounds
 };

@@ -54,7 +54,7 @@ export default function PerformanceScreen() {
           title="Vitamin C"
           type="vitamin_c"
           unit="mg"
-          color="#ffaa00"
+          color={colors.vitaminC}
           refreshKey={refreshKey}
         />
 
@@ -62,7 +62,7 @@ export default function PerformanceScreen() {
           title="Sugar Intake"
           type="sugar"
           unit="g"
-          color="#ff7eb6"
+          color={colors.sugar}
           refreshKey={refreshKey}
         />
 
