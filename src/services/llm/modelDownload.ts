@@ -35,22 +35,22 @@ interface ModelConfig {
 
 const MODELS: Record<string, ModelConfig> = {
   primary: {
-    name: "gemma-2-2b-q4-medium",
-    url: "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf",
-    sizeBytes: 1_500_000_000,
-    filename: "gemma-2-2b-q4-medium.gguf",
-  },
-  fallback: {
     name: "gemma-2-2b-q4-small",
     url: "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_S.gguf",
     sizeBytes: 1_300_000_000,
     filename: "gemma-2-2b-q4-small.gguf",
   },
+  fallback: {
+    name: "gemma-2-2b-q4-medium",
+    url: "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf",
+    sizeBytes: 1_500_000_000,
+    filename: "gemma-2-2b-q4-medium.gguf",
+  },
 };
 
 const BUNDLED_MODELS = [
-  { filename: "gemma-2-2b-q4-medium.gguf", type: "primary" as const },
-  { filename: "gemma-2-2b-q4-small.gguf", type: "fallback" as const },
+  { filename: "gemma-2-2b-q4-small.gguf", type: "primary" as const },
+  { filename: "gemma-2-2b-q4-medium.gguf", type: "fallback" as const },
 ];
 
 const MODEL_DIR = new Directory(Paths.document, 'models');

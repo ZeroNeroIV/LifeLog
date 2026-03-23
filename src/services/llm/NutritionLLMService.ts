@@ -11,9 +11,10 @@ import {
   compactConversation, MealType,
 } from "../../db";
 
-const MAX_TOKENS = 512;
+const MAX_TOKENS = 256;
 const TEMPERATURE = 0.3;
-const CONTEXT_SIZE = 2048;
+const CONTEXT_SIZE = 1024;
+const RESPONSE_TIMEOUT = 120_000; // 120s for slower devices
 const MAX_MESSAGES_BEFORE_COMPACT = 20;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -255,7 +256,7 @@ export const processMessage = async (
   messages.forEach(m => context += `${m.role === "user" ? "User" : "Assistant"}: ${m.content}\n\n`);
   
   let fullResponse = "";
-  const result = await _llamaContext.completion(
+  const completionPromise = _llamaContext.completion(
     { prompt: context + "Assistant:", n_predict: MAX_TOKENS, temperature: TEMPERATURE, stop: ["User:"] },
     (data) => {
       const t = typeof data === 'string' ? data : (data?.token ?? '');
@@ -265,6 +266,10 @@ export const processMessage = async (
       }
     }
   );
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error(`LLM response timed out after ${RESPONSE_TIMEOUT / 1000}s`)), RESPONSE_TIMEOUT)
+  );
+  const result = await Promise.race([completionPromise, timeoutPromise]);
   fullResponse = result.text.trim();
   
   await addMessage(_currentConversationId, "assistant", fullResponse);
@@ -381,7 +386,11 @@ const _compactIfNeeded = async (): Promise<void> => {
   if (messages.length < MAX_MESSAGES_BEFORE_COMPACT) return;
   
   const toSummarize = messages.slice(0, -5).map(m => `${m.role}: ${m.content}`).join("\n");
-  const result = await _llamaContext.completion({ prompt: `Summarize in 2 sentences:\n${toSummarize}\nSummary:`, n_predict: 100, temperature: 0.3 });
+  const compactPromise = _llamaContext.completion({ prompt: `Summarize in 2 sentences:\n${toSummarize}\nSummary:`, n_predict: 100, temperature: 0.3 });
+  const compactTimeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('Compaction timed out')), RESPONSE_TIMEOUT)
+  );
+  const result = await Promise.race([compactPromise, compactTimeout]);
   await updateConversationSummary(_currentConversationId, result.text.trim());
   await compactConversation(_currentConversationId, 5);
 };
