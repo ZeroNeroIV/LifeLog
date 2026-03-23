@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, KeyboardAvoidingView, ScrollView, Platform, Pressable, Alert } from 'react-native';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, KeyboardAvoidingView, ScrollView, Platform, Pressable, Alert, AppState } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { Play, Square, RefreshCcw, Coffee, Settings, X, Plus, CheckCircle2, Pencil, Trash2, BellOff } from 'lucide-react-native';
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
@@ -76,6 +76,13 @@ export default function PomodoroTimer({ onSessionComplete }) {
   const [editorForm, setEditorForm] = useState({ name: '', work: '25', shortBreak: '5', longBreak: '15', cycles: '4' });
   
   const timerRef = useRef(null);
+  const targetEndTimeRef = useRef(null); // Unix ms when timer should complete
+  const isActiveRef = useRef(false); // Stable ref for interval callbacks
+  const timeLeftRef = useRef(timeLeft); // Keep ref in sync for notification updates
+
+  // Keep refs in sync with state
+  useEffect(() => { isActiveRef.current = isActive; }, [isActive]);
+  useEffect(() => { timeLeftRef.current = timeLeft; }, [timeLeft]);
 
   // Initialize audio and notifications on mount
   useEffect(() => {
@@ -124,6 +131,7 @@ export default function PomodoroTimer({ onSessionComplete }) {
     await updateSetting('pomodoro_active_profile', newActiveId);
     
     if (newActiveId !== activeProfileId) {
+      targetEndTimeRef.current = null;
       setIsActive(false);
       setMode('work');
       setCycle(1);
@@ -132,37 +140,96 @@ export default function PomodoroTimer({ onSessionComplete }) {
     }
   };
 
-  // Timer effect with throttled notification updates
+  // Timer effect with timestamp-based tracking (survives background)
   useEffect(() => {
     if (isActive && timeLeft > 0) {
+      // Set target end time when timer starts or resumes
+      if (!targetEndTimeRef.current) {
+        targetEndTimeRef.current = Date.now() + timeLeft * 1000;
+      }
+
+      // Schedule a native notification for completion (fires even if app is killed)
+      if (notificationsReady) {
+        Notifications.scheduleNotificationAsync({
+          identifier: 'pomodoro-complete',
+          content: {
+            title: mode === 'work' ? '🎯 Focus Complete!' : '☕ Break Over!',
+            body: `Time to ${mode === 'work' ? 'take a break' : 'get back to work'}!`,
+            sound: true,
+            channelId: Platform.OS === 'android' ? 'timer' : undefined,
+          },
+          trigger: {
+            type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+            seconds: timeLeft,
+            repeats: false,
+          },
+        }).catch(e => console.log('[Notifications] Schedule complete error:', e));
+      }
+
+      // Visual countdown interval (UI only — actual time is tracked by timestamp)
       timerRef.current = setInterval(() => {
-        setTimeLeft((prev) => prev - 1);
-        
-        // Update notification only every 30 seconds (throttled)
+        if (!isActiveRef.current) return;
+        const remaining = Math.max(0, Math.round((targetEndTimeRef.current - Date.now()) / 1000));
+        setTimeLeft(remaining);
+
+        // Update sticky notification every 30s
         if (notificationsReady) {
           const now = Date.now();
           if (now - _lastNotificationUpdate >= NOTIFICATION_UPDATE_INTERVAL) {
-            updatePomodoroNotification(timeLeft, mode, activeProfile.name);
+            updatePomodoroNotification(remaining, mode, activeProfile.name);
             _lastNotificationUpdate = now;
           }
+        }
+
+        if (remaining <= 0) {
+          clearInterval(timerRef.current);
+          targetEndTimeRef.current = null;
+          handleComplete();
         }
       }, 1000);
     } else if (isActive && timeLeft === 0) {
       handleComplete();
-    } else if (!isActive && notificationsReady) {
-      clearPomodoroNotification();
-      _lastNotificationUpdate = 0;
+    } else if (!isActive) {
+      targetEndTimeRef.current = null;
+      if (notificationsReady) {
+        clearPomodoroNotification();
+        Notifications.cancelScheduledNotificationAsync('pomodoro-complete').catch(() => {});
+        _lastNotificationUpdate = 0;
+      }
     }
-    
+
     return () => clearInterval(timerRef.current);
   }, [isActive, timeLeft, mode, activeProfile.name, notificationsReady]);
 
+  // Recalculate time from timestamp when app returns to foreground
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active' && isActiveRef.current && targetEndTimeRef.current) {
+        const remaining = Math.max(0, Math.round((targetEndTimeRef.current - Date.now()) / 1000));
+        setTimeLeft(remaining);
+        if (remaining <= 0) {
+          targetEndTimeRef.current = null;
+          handleComplete();
+        } else {
+          // Update notification immediately on foreground return
+          if (notificationsReady) {
+            updatePomodoroNotification(remaining, mode, activeProfile.name);
+            _lastNotificationUpdate = Date.now();
+          }
+        }
+      }
+    });
+    return () => subscription.remove();
+  }, [notificationsReady, mode, activeProfile.name]);
+
   const handleComplete = async () => {
     clearInterval(timerRef.current);
+    targetEndTimeRef.current = null;
     setIsActive(false);
     
     if (notificationsReady) {
       clearPomodoroNotification();
+      Notifications.cancelScheduledNotificationAsync('pomodoro-complete').catch(() => {});
       _lastNotificationUpdate = 0;
     }
 
@@ -220,12 +287,20 @@ export default function PomodoroTimer({ onSessionComplete }) {
   };
 
   const toggleTimer = () => {
-    if (!isActive) stopAudio();
+    if (!isActive) {
+      stopAudio();
+      // Set target end time when starting/resuming
+      targetEndTimeRef.current = Date.now() + timeLeft * 1000;
+    } else {
+      // Clear on pause
+      targetEndTimeRef.current = null;
+    }
     setIsActive(!isActive);
   };
 
   const resetTimer = () => {
     stopAudio();
+    targetEndTimeRef.current = null;
     setIsActive(false);
     setMode('work');
     setCycle(1);
@@ -239,7 +314,13 @@ export default function PomodoroTimer({ onSessionComplete }) {
       const actionId = response.actionIdentifier;
       if (actionId === 'PAUSE_TIMER') {
         setIsActive(prev => {
-          if (prev) stopAudio();
+          if (prev) {
+            stopAudio();
+            targetEndTimeRef.current = null; // Clear on pause
+          } else {
+            // Resume: set new target end time
+            targetEndTimeRef.current = Date.now() + timeLeftRef.current * 1000;
+          }
           return !prev;
         });
       } else if (actionId === 'STOP_TIMER') {
