@@ -167,15 +167,36 @@ const extractJSON = (text) => {
 
 export const initializeLLM = async () => {
   if (_llamaContext) return;
+  
+  console.log('[LLM] Checking model info...');
   const modelInfo = await getModelInfo();
   if (!modelInfo.isDownloaded) throw new Error("Model not downloaded");
-  
-  _llamaContext = await initLlama({
-    model: modelInfo.path, n_ctx: CONTEXT_SIZE, n_threads: 4, use_mlock: true, use_mmap: true,
-  });
-  
-  const existing = await getLatestConversation();
-  _currentConversationId = existing?.id || await createConversation();
+  console.log('[LLM] Model found at:', modelInfo.path);
+
+  try {
+    console.log('[LLM] Initializing llama context...');
+    _llamaContext = await initLlama({
+      model: modelInfo.path, n_ctx: CONTEXT_SIZE, n_threads: 4, use_mlock: true, use_mmap: true,
+    });
+    console.log('[LLM] Context initialized, type:', typeof _llamaContext, 'has completion:', typeof _llamaContext?.completion);
+  } catch (e) {
+    console.error('[LLM] initLlama failed:', e);
+    throw new Error(`Failed to initialize AI model: ${e.message || 'Native module error'}`);
+  }
+
+  if (!_llamaContext || typeof _llamaContext.completion !== 'function') {
+    throw new Error("AI model initialized but completion API is unavailable. Try rebuilding the app.");
+  }
+
+  try {
+    console.log('[LLM] Setting up conversation...');
+    const existing = await getLatestConversation();
+    _currentConversationId = existing?.id || await createConversation();
+    console.log('[LLM] Conversation ID:', _currentConversationId);
+  } catch (e) {
+    console.error('[LLM] Conversation setup failed:', e);
+    throw new Error(`Failed to setup chat: ${e.message}`);
+  }
 };
 
 export const isLLMReady = () => _llamaContext !== null;
@@ -194,7 +215,14 @@ export const processMessage = async (userMessage, onToken = null) => {
   let fullResponse = "";
   const result = await _llamaContext.completion(
     { prompt: context + "Assistant:", n_predict: MAX_TOKENS, temperature: TEMPERATURE, stop: ["User:"] },
-    (token) => { fullResponse += token.token; onToken?.(token.token); }
+    (data) => {
+      // llama.rn passes TokenData with .token property; handle both formats defensively
+      const t = typeof data === 'string' ? data : (data?.token ?? '');
+      if (t) {
+        fullResponse += t;
+        onToken?.(t);
+      }
+    }
   );
   fullResponse = result.text.trim();
   

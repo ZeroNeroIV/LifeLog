@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, KeyboardAvoidingView, ScrollView, Platform, Pressable, Alert, AppState } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, KeyboardAvoidingView, ScrollView, Platform, Pressable, Alert, AppState, Keyboard, Animated } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { Play, Square, RefreshCcw, Coffee, Settings, X, Plus, CheckCircle2, Pencil, Trash2, BellOff } from 'lucide-react-native';
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
@@ -84,6 +84,16 @@ export default function PomodoroTimer({ onSessionComplete }) {
   useEffect(() => { isActiveRef.current = isActive; }, [isActive]);
   useEffect(() => { timeLeftRef.current = timeLeft; }, [timeLeft]);
 
+  // Smooth keyboard dismiss animation in profile modal
+  useEffect(() => {
+    if (!modalVisible) return;
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+    const showSub = Keyboard.addListener(showEvent, () => Keyboard.scheduleLayoutAnimation());
+    const hideSub = Keyboard.addListener(hideEvent, () => Keyboard.scheduleLayoutAnimation());
+    return () => { showSub.remove(); hideSub.remove(); };
+  }, [modalVisible]);
+
   // Initialize audio and notifications on mount
   useEffect(() => {
     const initializeFeatures = async () => {
@@ -127,8 +137,14 @@ export default function PomodoroTimer({ onSessionComplete }) {
   const saveProfiles = async (newProfiles, newActiveId = activeProfileId) => {
     setProfiles(newProfiles);
     setActiveProfileId(newActiveId);
-    await updateSetting('pomodoro_profiles', JSON.stringify(newProfiles));
-    await updateSetting('pomodoro_active_profile', newActiveId);
+    try {
+      await updateSetting('pomodoro_profiles', JSON.stringify(newProfiles));
+      await updateSetting('pomodoro_active_profile', newActiveId);
+    } catch (e) {
+      console.error('[Pomodoro] Failed to save profiles:', e);
+      Alert.alert('Save Error', 'Failed to save profile. Please try again.');
+      return;
+    }
     
     if (newActiveId !== activeProfileId) {
       targetEndTimeRef.current = null;
@@ -365,7 +381,10 @@ export default function PomodoroTimer({ onSessionComplete }) {
   };
 
   const handleSaveEditor = () => {
-    if (!editorForm.name.trim()) return;
+    if (!editorForm.name.trim()) {
+      Alert.alert('Name Required', 'Please enter a profile name.');
+      return;
+    }
     
     const pInfo = {
       name: editorForm.name.trim(),
