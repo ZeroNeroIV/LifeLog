@@ -2,10 +2,21 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, ActivityIndicator, Animated, Alert } from 'react-native';
 import { Send, Check, X, Bot, AlertCircle, Mic, MicOff, RefreshCcw } from 'lucide-react-native';
-import { useSpeechRecognitionEvent, ExpoSpeechRecognitionModule } from 'expo-speech-recognition';
 import { useTheme } from '../theme';
 import { initializeLLM, isLLMReady, processMessage, logFoodsFromResponse, getCurrentConversationId } from '../services/llm/NutritionLLMService';
 import { getConversationMessages } from '../db';
+
+// Guard: expo-speech-recognition requires a dev build, not available in Expo Go
+let SpeechModule = null;
+let useSpeechRecognitionEventSafe = () => {};
+let ExpoSpeechRecognitionModuleSafe = null;
+try {
+  SpeechModule = require('expo-speech-recognition');
+  useSpeechRecognitionEventSafe = SpeechModule.useSpeechRecognitionEvent;
+  ExpoSpeechRecognitionModuleSafe = SpeechModule.ExpoSpeechRecognitionModule;
+} catch (e) {
+  console.warn('[Speech] expo-speech-recognition not available');
+}
 
 const RESPONSE_TIMEOUT = 60000; // 60 second timeout for model response
 
@@ -38,13 +49,13 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
   }, [modelReady]);
 
   // Speech recognition event handlers
-  useSpeechRecognitionEvent('start', () => {
+  useSpeechRecognitionEventSafe('start', () => {
     setIsListening(true);
     setVoiceError(null);
     setLastFinalTranscript('');
   });
 
-  useSpeechRecognitionEvent('end', () => {
+  useSpeechRecognitionEventSafe('end', () => {
     // Save the last partial result as final text before clearing
     setPartialResults(currentPartial => {
       if (currentPartial && currentPartial.trim()) {
@@ -55,7 +66,7 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
     setIsListening(false);
   });
 
-  useSpeechRecognitionEvent('result', (event) => {
+  useSpeechRecognitionEventSafe('result', (event) => {
     console.log('[STT Result Event]', JSON.stringify(event, null, 2));
     
     // Handle different possible structures from expo-speech-recognition
@@ -97,7 +108,7 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
     }
   });
 
-  useSpeechRecognitionEvent('error', (event) => {
+  useSpeechRecognitionEventSafe('error', (event) => {
     console.error('Voice error:', event);
     setIsListening(false);
     setPartialResults('');
@@ -141,13 +152,18 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
   }, [isTyping, typingAnim]);
 
   const startListening = async () => {
+    if (!ExpoSpeechRecognitionModuleSafe) {
+      setVoiceError('Speech recognition not available (requires dev build)');
+      setTimeout(() => setVoiceError(null), 3000);
+      return;
+    }
     try {
       setVoiceError(null);
       setPartialResults('');
       setLastFinalTranscript('');
       
       // Check/request permissions
-      const result = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      const result = await ExpoSpeechRecognitionModuleSafe.requestPermissionsAsync();
       if (!result.granted) {
         setVoiceError('Microphone permission denied');
         setTimeout(() => setVoiceError(null), 3000);
@@ -155,7 +171,7 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
       }
 
       // Start recognition
-      ExpoSpeechRecognitionModule.start({
+      ExpoSpeechRecognitionModuleSafe.start({
         lang: 'en-US',
         interimResults: true,
         continuous: false,
@@ -169,7 +185,7 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
 
   const stopListening = () => {
     try {
-      ExpoSpeechRecognitionModule.stop();
+      ExpoSpeechRecognitionModuleSafe?.stop();
     } catch (e) {
       console.error('Failed to stop voice:', e);
     }
@@ -429,9 +445,9 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
         {/* Microphone button */}
         <Animated.View style={{ transform: [{ scale: isListening ? pulseAnim : 1 }] }}>
           <TouchableOpacity 
-            style={[s.micBtn, isListening && s.micBtnActive]} 
+            style={[s.micBtn, isListening && s.micBtnActive, !ExpoSpeechRecognitionModuleSafe && s.micBtnDisabled]} 
             onPress={toggleVoice}
-            disabled={isLoading}
+            disabled={isLoading || !ExpoSpeechRecognitionModuleSafe}
           >
             {isListening ? (
               <MicOff size={20} color="#fff" />
@@ -498,6 +514,7 @@ const getStyles = (colors) => StyleSheet.create({
   // Voice input styles
   micBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceInput, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.surfaceBorder },
   micBtnActive: { backgroundColor: '#ef4444', borderColor: '#ef4444' },
+  micBtnDisabled: { opacity: 0.4 },
   voiceErrorBar: { backgroundColor: colors.danger + '20', paddingHorizontal: 16, paddingVertical: 8, borderTopWidth: 1, borderTopColor: colors.danger + '40' },
   voiceErrorText: { fontSize: 13, color: colors.danger, textAlign: 'center' },
   partialBar: { backgroundColor: colors.primaryBg, paddingHorizontal: 16, paddingVertical: 8, borderTopWidth: 1, borderTopColor: colors.primary + '40' },
