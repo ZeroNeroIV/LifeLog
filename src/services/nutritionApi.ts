@@ -1,10 +1,25 @@
-// src/services/nutritionApi.js
+// src/services/nutritionApi.ts
 // Multi-Tiered Nutrition API Fetcher
 // Cascades across USDA -> Open Food Facts -> Local Mock Database
 
 const USDA_DEMO_KEY = process.env.EXPO_PUBLIC_USDA_FOODDATA_CENTRAL_API_KEY;
 
-const FALLBACK_DRINKS = [
+export interface NutrientValue {
+  value: number;
+  unit: string;
+}
+
+export interface DrinkResult {
+  id: string;
+  name: string;
+  brand: string;
+  water: NutrientValue | null;
+  caffeine: NutrientValue | null;
+  vitaminC: NutrientValue | null;
+  sugar: NutrientValue | null;
+}
+
+const FALLBACK_DRINKS: DrinkResult[] = [
   {
     id: "mock-1",
     name: "Espresso",
@@ -61,21 +76,54 @@ const FALLBACK_DRINKS = [
   },
 ];
 
+interface USDAFoodNutrient {
+  nutrientName: string;
+  value: number;
+  unitName: string;
+}
+
+interface USDAFood {
+  fdcId: number;
+  description: string;
+  brandOwner?: string;
+  foodNutrients: USDAFoodNutrient[];
+}
+
+interface USDAResponse {
+  foods?: USDAFood[];
+}
+
+interface OFFProduct {
+  _id: string;
+  product_name?: string;
+  brands?: string;
+  nutriments?: {
+    caffeine_100g?: number;
+    caffeine_value?: number;
+    'vitamin-c_100g'?: number;
+    sugars_100g?: number;
+  };
+}
+
+interface OFFResponse {
+  products?: OFFProduct[];
+}
+
 /**
  * USDA FoodData Central
  * Highly accurate scientific data, but rate-limited (30/hour on DEMO KEY)
  */
-async function fetchUSDA(query) {
+async function fetchUSDA(query: string): Promise<DrinkResult[]> {
   const res = await fetch(
     `https://api.nal.usda.gov/fdc/v1/foods/search?query=${encodeURIComponent(query)}&api_key=${USDA_DEMO_KEY}&pageSize=15`,
   );
   if (!res.ok) throw new Error("USDA API Rate Limit Reached");
 
-  const data = await res.json();
+  const data: USDAResponse = await res.json();
   if (!data.foods || data.foods.length === 0) return [];
 
   return data.foods.map((f) => {
-    const getNutrient = (nameSnippet) => {
+    const getNutrient = (nameSnippet: string): NutrientValue | null => {
       const n = f.foodNutrients.find((n) =>
         n.nutrientName.toLowerCase().includes(nameSnippet.toLowerCase()),
       );
@@ -98,29 +146,27 @@ async function fetchUSDA(query) {
  * Open Food Facts API
  * Fully free, unauthenticated crowdsourced global barcode database.
  */
-async function fetchOpenFoodFacts(query) {
+async function fetchOpenFoodFacts(query: string): Promise<DrinkResult[]> {
   const res = await fetch(
     `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(query)}&search_simple=1&action=process&json=1&page_size=15`,
   );
   if (!res.ok) throw new Error("Open Food Facts API Error");
 
-  const data = await res.json();
+  const data: OFFResponse = await res.json();
   if (!data.products || data.products.length === 0) return [];
 
-  // OFF provides numeric values usually normalized to per 100g, natively measured in grams.
-  // Caffeine and Vitamin C are extremely small so they are returned as grams by OFF. Note: 1g = 1000mg.
   return data.products
     .map((p) => {
       return {
         id: `off-${p._id}`,
         name: p.product_name || query,
         brand: p.brands || "",
-        water: null, // Open Food Facts rarely tracks explicit raw water content. We'll implicitly calculate it to 90% in the UI.
+        water: null,
         caffeine:
           p.nutriments?.caffeine_100g || p.nutriments?.caffeine_value
             ? {
                 value:
-                  (p.nutriments.caffeine_100g || p.nutriments.caffeine_value) *
+                  (p.nutriments.caffeine_100g || p.nutriments.caffeine_value!) *
                   1000,
                 unit: "mg",
               }
@@ -138,10 +184,8 @@ async function fetchOpenFoodFacts(query) {
 
 /**
  * Orchestrator fetching function. Combines all database sources into a bulletproof pipeline.
- * @param {string} query Search text
- * @returns {Promise<Array>} List of parsed items mapped to standard nutritional values
  */
-export const searchDrinks = async (query) => {
+export const searchDrinks = async (query: string): Promise<DrinkResult[]> => {
   if (!query || query.length < 2) return [];
 
   // 1. USDA (The Gold Standard)
@@ -149,7 +193,7 @@ export const searchDrinks = async (query) => {
     const usdaData = await fetchUSDA(query);
     if (usdaData?.length > 0) return usdaData;
   } catch (err) {
-    console.warn("[USDA Failed. Cascading...]", err.message);
+    console.warn("[USDA Failed. Cascading...]", (err as Error).message);
   }
 
   // 2. Open Food Facts (The Wikipedia of Food)
@@ -157,10 +201,10 @@ export const searchDrinks = async (query) => {
     const offData = await fetchOpenFoodFacts(query);
     if (offData?.length > 0) return offData;
   } catch (err) {
-    console.warn("[Open Food Facts Failed. Cascading...]", err.message);
+    console.warn("[Open Food Facts Failed. Cascading...]", (err as Error).message);
   }
 
-  // 3. Fallback Mock Data (Guarantees the UI never spins indefinitely and always has something to show)
+  // 3. Fallback Mock Data
   console.warn("[Using Local Data Dictionary]");
   return FALLBACK_DRINKS.filter((d) =>
     d.name.toLowerCase().includes(query.toLowerCase()),

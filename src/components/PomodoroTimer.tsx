@@ -1,49 +1,52 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, KeyboardAvoidingView, ScrollView, Platform, Pressable, Alert, AppState, Keyboard, Animated } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { Play, Square, RefreshCcw, Coffee, Settings, X, Plus, CheckCircle2, Pencil, Trash2, BellOff } from 'lucide-react-native';
-import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
+import { createAudioPlayer, setAudioModeAsync, AudioPlayer } from 'expo-audio';
 import { addLog, getSetting, updateSetting } from '../db';
 import { updatePomodoroNotification, clearPomodoroNotification } from '../notifications';
 import BentoCard from './BentoCard';
 import TooltipButton from './TooltipButton';
-import { useTheme } from '../theme';
+import { useTheme, ThemeColors } from '../theme';
 
-const DEFAULT_PROFILES = [
+interface PomodoroProfile {
+  id: string;
+  name: string;
+  work: number;
+  shortBreak: number;
+  longBreak: number;
+  cycles: number;
+}
+
+const DEFAULT_PROFILES: PomodoroProfile[] = [
   { id: '1', name: 'Classic (25/5)', work: 25, shortBreak: 5, longBreak: 15, cycles: 4 },
   { id: '2', name: 'Quick (20/5)', work: 20, shortBreak: 5, longBreak: 15, cycles: 3 },
 ];
 
-// Audio URLs - using reliable short alarm sounds
 const AUDIO_URLS = {
   work: 'https://actions.google.com/sounds/v1/alarms/alarm_clock.ogg',
   break: 'https://actions.google.com/sounds/v1/alarms/digital_watch_alarm_long.ogg',
 };
 
-// Lazy audio initialization - outside component to avoid re-creation
-let _workPlayer = null;
-let _breakPlayer = null;
+let _workPlayer: AudioPlayer | null = null;
+let _breakPlayer: AudioPlayer | null = null;
 let _audioInitialized = false;
 let _lastNotificationUpdate = 0;
-const NOTIFICATION_UPDATE_INTERVAL = 30000; // 30 seconds
+const NOTIFICATION_UPDATE_INTERVAL = 30000;
 
-const initAudio = async () => {
+const initAudio = async (): Promise<boolean> => {
   if (_audioInitialized) return true;
   try {
-    // Configure audio mode for iOS silent mode support
     await setAudioModeAsync({
       playsInSilentMode: true,
       shouldPlayInBackground: true,
     });
     
-    // Create players with downloadFirst for reliable playback
     _workPlayer = createAudioPlayer({
       uri: AUDIO_URLS.work,
-      downloadFirst: true,
     });
     _breakPlayer = createAudioPlayer({
       uri: AUDIO_URLS.break,
-      downloadFirst: true,
     });
     
     _audioInitialized = true;
@@ -55,53 +58,52 @@ const initAudio = async () => {
   }
 };
 
-export default function PomodoroTimer({ onSessionComplete }) {
-  const { colors } = useTheme();
-  const s = getStyles(colors);
+interface PomodoroTimerProps {
+  onSessionComplete?: () => void;
+}
 
-  const [mode, setMode] = useState('work'); 
+export default function PomodoroTimer({ onSessionComplete }: PomodoroTimerProps) {
+  const { colors } = useTheme();
+  const s = useMemo(() => getStyles(colors), [colors]);
+
+  const [mode, setMode] = useState<'work' | 'shortBreak' | 'longBreak'>('work'); 
   const [cycle, setCycle] = useState(1);
   const [timeLeft, setTimeLeft] = useState(25 * 60);
   const [isActive, setIsActive] = useState(false);
   const [audioReady, setAudioReady] = useState(false);
   const [notificationsReady, setNotificationsReady] = useState(false);
   
-  const [profiles, setProfiles] = useState(DEFAULT_PROFILES);
+  const [profiles, setProfiles] = useState<PomodoroProfile[]>(DEFAULT_PROFILES);
   const [activeProfileId, setActiveProfileId] = useState('1');
   const activeProfile = profiles.find(p => p.id === activeProfileId) || profiles[0];
   
   const [modalVisible, setModalVisible] = useState(false);
   const [isAddingNew, setIsAddingNew] = useState(false);
-  const [editingProfileId, setEditingProfileId] = useState(null);
+  const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
   const [editorForm, setEditorForm] = useState({ name: '', work: '25', shortBreak: '5', longBreak: '15', cycles: '4' });
   
-  const timerRef = useRef(null);
-  const targetEndTimeRef = useRef(null); // Unix ms when timer should complete
-  const isActiveRef = useRef(false); // Stable ref for interval callbacks
-  const timeLeftRef = useRef(timeLeft); // Keep ref in sync for notification updates
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const targetEndTimeRef = useRef<number | null>(null);
+  const isActiveRef = useRef(false);
+  const timeLeftRef = useRef(timeLeft);
 
-  // Keep refs in sync with state
   useEffect(() => { isActiveRef.current = isActive; }, [isActive]);
   useEffect(() => { timeLeftRef.current = timeLeft; }, [timeLeft]);
 
-  // Smooth keyboard dismiss animation in profile modal
   useEffect(() => {
     if (!modalVisible) return;
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const showSub = Keyboard.addListener(showEvent, () => Keyboard.scheduleLayoutAnimation());
-    const hideSub = Keyboard.addListener(hideEvent, () => Keyboard.scheduleLayoutAnimation());
+    const showSub = Keyboard.addListener(showEvent, () => {});
+    const hideSub = Keyboard.addListener(hideEvent, () => {});
     return () => { showSub.remove(); hideSub.remove(); };
   }, [modalVisible]);
 
-  // Initialize audio and notifications on mount
   useEffect(() => {
     const initializeFeatures = async () => {
-      // Initialize audio (non-blocking)
       const audioSuccess = await initAudio();
       setAudioReady(audioSuccess);
       
-      // Check notification permissions
       try {
         const { status } = await Notifications.getPermissionsAsync();
         setNotificationsReady(status === 'granted');
@@ -123,18 +125,20 @@ export default function PomodoroTimer({ onSessionComplete }) {
   const loadSettings = async () => {
     const pStr = await getSetting('pomodoro_profiles');
     if (pStr) {
-        setProfiles(JSON.parse(pStr));
+      try { setProfiles(JSON.parse(pStr)); } catch {}
     }
     const currentId = await getSetting('pomodoro_active_profile', '1');
-    setActiveProfileId(currentId);
+    setActiveProfileId(currentId ?? '1');
     
     if (!isActive && mode === 'work') {
-        const loadedProfile = pStr ? JSON.parse(pStr).find(p => p.id === currentId) : DEFAULT_PROFILES.find(p => p.id === currentId);
+      try {
+        const loadedProfile = pStr ? JSON.parse(pStr).find((p: PomodoroProfile) => p.id === currentId) : DEFAULT_PROFILES.find(p => p.id === currentId);
         if (loadedProfile) setTimeLeft(Math.round(loadedProfile.work * 60));
+      } catch {}
     }
   };
 
-  const saveProfiles = async (newProfiles, newActiveId = activeProfileId) => {
+  const saveProfiles = async (newProfiles: PomodoroProfile[], newActiveId = activeProfileId) => {
     setProfiles(newProfiles);
     setActiveProfileId(newActiveId);
     try {
@@ -156,15 +160,53 @@ export default function PomodoroTimer({ onSessionComplete }) {
     }
   };
 
-  // Timer effect with timestamp-based tracking (survives background)
+  const handleComplete = useCallback(async () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    targetEndTimeRef.current = null;
+    setIsActive(false);
+    
+    if (notificationsReady) {
+      clearPomodoroNotification();
+      Notifications.cancelScheduledNotificationAsync('pomodoro-complete').catch(() => {});
+      _lastNotificationUpdate = 0;
+    }
+
+    if (mode === 'work') {
+      if (audioReady && _workPlayer) {
+        try { _workPlayer.seekTo(0); _workPlayer.play(); } catch (e) { console.log('[Audio] Error:', e); }
+      }
+      
+      await addLog('focus', activeProfile.work);
+      if (onSessionComplete) onSessionComplete();
+      
+      if (cycle >= activeProfile.cycles) {
+        setMode('longBreak');
+        setTimeLeft(Math.round(activeProfile.longBreak * 60));
+      } else {
+        setMode('shortBreak');
+        setTimeLeft(Math.round(activeProfile.shortBreak * 60));
+      }
+    } else {
+      if (audioReady && _breakPlayer) {
+        try { _breakPlayer.seekTo(0); _breakPlayer.play(); } catch (e) { console.log('[Audio] Error:', e); }
+      }
+      
+      if (mode === 'longBreak') {
+         setCycle(1);
+      } else {
+         setCycle(cycle + 1);
+      }
+      setMode('work');
+      setTimeLeft(Math.round(activeProfile.work * 60));
+    }
+  }, [mode, cycle, activeProfile, audioReady, notificationsReady, onSessionComplete]);
+
   useEffect(() => {
     if (isActive && timeLeft > 0) {
-      // Set target end time when timer starts or resumes
       if (!targetEndTimeRef.current) {
         targetEndTimeRef.current = Date.now() + timeLeft * 1000;
       }
 
-      // Schedule a native notification for completion (fires even if app is killed)
       if (notificationsReady) {
         Notifications.scheduleNotificationAsync({
           identifier: 'pomodoro-complete',
@@ -172,23 +214,21 @@ export default function PomodoroTimer({ onSessionComplete }) {
             title: mode === 'work' ? '🎯 Focus Complete!' : '☕ Break Over!',
             body: `Time to ${mode === 'work' ? 'take a break' : 'get back to work'}!`,
             sound: true,
-            channelId: Platform.OS === 'android' ? 'timer' : undefined,
           },
           trigger: {
             type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+            channelId: Platform.OS === 'android' ? 'timer' : undefined,
             seconds: timeLeft,
             repeats: false,
           },
         }).catch(e => console.log('[Notifications] Schedule complete error:', e));
       }
 
-      // Visual countdown interval (UI only — actual time is tracked by timestamp)
       timerRef.current = setInterval(() => {
         if (!isActiveRef.current) return;
-        const remaining = Math.max(0, Math.round((targetEndTimeRef.current - Date.now()) / 1000));
+        const remaining = Math.max(0, Math.round((targetEndTimeRef.current! - Date.now()) / 1000));
         setTimeLeft(remaining);
 
-        // Update sticky notification every 30s
         if (notificationsReady) {
           const now = Date.now();
           if (now - _lastNotificationUpdate >= NOTIFICATION_UPDATE_INTERVAL) {
@@ -198,7 +238,7 @@ export default function PomodoroTimer({ onSessionComplete }) {
         }
 
         if (remaining <= 0) {
-          clearInterval(timerRef.current);
+          if (timerRef.current) clearInterval(timerRef.current);
           targetEndTimeRef.current = null;
           handleComplete();
         }
@@ -214,10 +254,9 @@ export default function PomodoroTimer({ onSessionComplete }) {
       }
     }
 
-    return () => clearInterval(timerRef.current);
-  }, [isActive, timeLeft, mode, activeProfile.name, notificationsReady]);
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, [isActive, timeLeft, mode, activeProfile.name, notificationsReady, handleComplete]);
 
-  // Recalculate time from timestamp when app returns to foreground
   useEffect(() => {
     const subscription = AppState.addEventListener('change', (state) => {
       if (state === 'active' && isActiveRef.current && targetEndTimeRef.current) {
@@ -226,70 +265,14 @@ export default function PomodoroTimer({ onSessionComplete }) {
         if (remaining <= 0) {
           targetEndTimeRef.current = null;
           handleComplete();
-        } else {
-          // Update notification immediately on foreground return
-          if (notificationsReady) {
-            updatePomodoroNotification(remaining, mode, activeProfile.name);
-            _lastNotificationUpdate = Date.now();
-          }
+        } else if (notificationsReady) {
+          updatePomodoroNotification(remaining, mode, activeProfile.name);
+          _lastNotificationUpdate = Date.now();
         }
       }
     });
     return () => subscription.remove();
-  }, [notificationsReady, mode, activeProfile.name]);
-
-  const handleComplete = async () => {
-    clearInterval(timerRef.current);
-    targetEndTimeRef.current = null;
-    setIsActive(false);
-    
-    if (notificationsReady) {
-      clearPomodoroNotification();
-      Notifications.cancelScheduledNotificationAsync('pomodoro-complete').catch(() => {});
-      _lastNotificationUpdate = 0;
-    }
-
-    if (mode === 'work') {
-      // Play work completion sound
-      if (audioReady && _workPlayer) {
-        try {
-          _workPlayer.seekTo(0);
-          _workPlayer.play();
-        } catch (e) {
-          console.log('[Audio] Error playing work sound:', e);
-        }
-      }
-      
-      await addLog('focus', activeProfile.work);
-      if (onSessionComplete) onSessionComplete();
-      
-      if (cycle >= activeProfile.cycles) {
-        setMode('longBreak');
-        setTimeLeft(Math.round(activeProfile.longBreak * 60));
-      } else {
-        setMode('shortBreak');
-        setTimeLeft(Math.round(activeProfile.shortBreak * 60));
-      }
-    } else {
-      // Play break completion sound
-      if (audioReady && _breakPlayer) {
-        try {
-          _breakPlayer.seekTo(0);
-          _breakPlayer.play();
-        } catch (e) {
-          console.log('[Audio] Error playing break sound:', e);
-        }
-      }
-      
-      if (mode === 'longBreak') {
-         setCycle(1);
-      } else {
-         setCycle(cycle + 1);
-      }
-      setMode('work');
-      setTimeLeft(Math.round(activeProfile.work * 60));
-    }
-  };
+  }, [notificationsReady, mode, activeProfile.name, handleComplete]);
 
   const stopAudio = () => {
     try {
@@ -305,10 +288,8 @@ export default function PomodoroTimer({ onSessionComplete }) {
   const toggleTimer = () => {
     if (!isActive) {
       stopAudio();
-      // Set target end time when starting/resuming
       targetEndTimeRef.current = Date.now() + timeLeft * 1000;
     } else {
-      // Clear on pause
       targetEndTimeRef.current = null;
     }
     setIsActive(!isActive);
@@ -332,9 +313,8 @@ export default function PomodoroTimer({ onSessionComplete }) {
         setIsActive(prev => {
           if (prev) {
             stopAudio();
-            targetEndTimeRef.current = null; // Clear on pause
+            targetEndTimeRef.current = null;
           } else {
-            // Resume: set new target end time
             targetEndTimeRef.current = Date.now() + timeLeftRef.current * 1000;
           }
           return !prev;
@@ -359,7 +339,7 @@ export default function PomodoroTimer({ onSessionComplete }) {
     setIsAddingNew(true);
   };
 
-  const openEditorForProfile = (p) => {
+  const openEditorForProfile = (p: PomodoroProfile) => {
     setEditorForm({
       name: p.name,
       work: p.work.toString(),
@@ -371,7 +351,7 @@ export default function PomodoroTimer({ onSessionComplete }) {
     setIsAddingNew(true);
   };
 
-  const deleteProfile = (id) => {
+  const deleteProfile = (id: string) => {
     if (profiles.length <= 1) {
       return Alert.alert('Cannot delete', 'You must have at least one profile.');
     }
@@ -398,7 +378,7 @@ export default function PomodoroTimer({ onSessionComplete }) {
       const newProfiles = profiles.map(p => p.id === editingProfileId ? { ...p, ...pInfo } : p);
       saveProfiles(newProfiles, activeProfileId);
     } else {
-      const newProfile = { id: Date.now().toString(), ...pInfo };
+      const newProfile: PomodoroProfile = { id: Date.now().toString(), ...pInfo };
       saveProfiles([...profiles, newProfile], newProfile.id);
     }
     
@@ -544,15 +524,15 @@ export default function PomodoroTimer({ onSessionComplete }) {
   );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   settingsIcon: { position: 'absolute', top: 20, right: 20, zIndex: 10 },
   container: { alignItems: 'center', justifyContent: 'center', paddingVertical: 10, marginTop: 10 },
   time: { fontSize: 36, fontWeight: '800', fontVariant: ['tabular-nums'], letterSpacing: -1, marginBottom: 4 },
-  profileTag: { fontSize: 10, color: colors.textMuted, fontWeight: '800', textTransform: 'uppercase', marginBottom: 16, letterSpacing: 1 },
+  profileTag: { fontSize: 10, color: colors.textMuted, fontWeight: '800', textTransform: 'uppercase' as const, marginBottom: 16, letterSpacing: 1 },
   controls: { flexDirection: 'row', gap: 12 },
   btn: { width: 50, height: 50, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   testBtn: { marginTop: 20, backgroundColor: colors.dangerBg, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
-  testText: { color: colors.danger, fontSize: 10, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1 },
+  testText: { color: colors.danger, fontSize: 10, fontWeight: '800', textTransform: 'uppercase' as const, letterSpacing: 1 },
   warningText: { fontSize: 11, color: colors.textDim, marginTop: 8, textAlign: 'center' },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: colors.surface, borderTopLeftRadius: 32, borderTopRightRadius: 32, padding: 24, paddingBottom: 40, maxHeight: '80%', borderTopWidth: 1, borderTopColor: colors.surfaceBorder },

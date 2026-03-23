@@ -4,16 +4,15 @@ import { Bell, Droplets, Trash2, Save, AlertOctagon, Sun, Moon, User, Apple, Tim
 import BentoCard from '../src/components/BentoCard';
 import ScreenLayout from '../src/components/ScreenLayout';
 import { forceTestMoodCheck, scheduleNextMoodUnlockNotification } from '../src/notifications';
-import { getAllSettings, updateSetting, clearAllLogs } from '../src/db';
-import { getDB } from '../src/db';
+import { getAllSettings, updateSetting, clearAllLogs, getDB } from '../src/db';
 import * as Haptics from 'expo-haptics';
-import { useTheme } from '../src/theme';
+import { useTheme, ThemeColors } from '../src/theme';
 
 export default function SettingsScreen() {
   const { colors, isDark, toggleTheme } = useTheme();
   const s = useMemo(() => getStyles(colors), [colors]);
   
-  const [settings, setSettings] = useState({ 
+  const [settings, setSettings] = useState<Record<string, string>>({ 
     water_fav1_ml: '250', water_fav2_ml: '500',
     profile_fullname: '', profile_username: '', profile_email: '',
     nutrition_calorie_goal: '2000', nutrition_protein_goal: '50',
@@ -65,7 +64,7 @@ export default function SettingsScreen() {
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               Alert.alert("✓ Cleared", "All metric logs have been deleted.");
             } catch (error) {
-              Alert.alert("Error", `Failed to clear metrics: ${error.message}`);
+              Alert.alert("Error", `Failed to clear metrics: ${(error as Error).message}`);
             }
           }
         }
@@ -95,7 +94,7 @@ export default function SettingsScreen() {
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               Alert.alert("✓ Cleared", "All meals and nutrition data have been deleted.");
             } catch (error) {
-              Alert.alert("Error", `Failed to clear meals: ${error.message}`);
+              Alert.alert("Error", `Failed to clear meals: ${(error as Error).message}`);
             }
           }
         }
@@ -124,7 +123,7 @@ export default function SettingsScreen() {
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               Alert.alert("✓ Cleared", "All chat history has been deleted.");
             } catch (error) {
-              Alert.alert("Error", `Failed to clear chat: ${error.message}`);
+              Alert.alert("Error", `Failed to clear chat: ${(error as Error).message}`);
             }
           }
         }
@@ -148,7 +147,7 @@ export default function SettingsScreen() {
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               Alert.alert("✓ Data Cleared", "All your data has been permanently deleted. Your settings have been preserved.");
             } catch (error) {
-              Alert.alert("Error", `Failed to clear data: ${error.message}`);
+              Alert.alert("Error", `Failed to clear data: ${(error as Error).message}`);
             }
           }
         }
@@ -260,7 +259,7 @@ export default function SettingsScreen() {
                       return (
                         <View style={s.profilesContainer}>
                           <Text style={s.label}>Active Profiles ({profiles.length})</Text>
-                          {profiles.map((profile, idx) => (
+                          {profiles.map((profile: { name: string; work: number; shortBreak: number; longBreak: number }, idx: number) => (
                             <View key={idx} style={s.profileItem}>
                               <Text style={s.profileName}>{profile.name}</Text>
                               <Text style={s.profileDetails}>
@@ -360,12 +359,12 @@ export default function SettingsScreen() {
   );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { padding: 24 },
   menuBox: { marginTop: 12 },
   menuText: { color: colors.textMuted, fontSize: 13, lineHeight: 20, marginBottom: 16 },
   
-  label: { color: colors.textDim, fontSize: 12, fontWeight: '700', textTransform: 'uppercase', marginBottom: 8, letterSpacing: 1 },
+  label: { color: colors.textDim, fontSize: 12, fontWeight: '700', textTransform: 'uppercase' as const, marginBottom: 8, letterSpacing: 1 },
   input: { backgroundColor: colors.surfaceInput, color: colors.text, borderWidth: 1, borderColor: colors.surfaceBorder, borderRadius: 12, padding: 16, fontSize: 16, marginBottom: 16 },
   row: { flexDirection: 'row', gap: 12 },
   halfInput: { flex: 1 },
@@ -378,9 +377,6 @@ const getStyles = (colors) => StyleSheet.create({
   
   btnSecondary: { backgroundColor: colors.surface, padding: 16, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: colors.surfaceBorder },
   btnSecondaryText: { color: colors.accent2, fontWeight: '700', fontSize: 14 },
-  
-  btnAccent: { backgroundColor: colors.primary, padding: 16, borderRadius: 12, alignItems: 'center' },
-  btnAccentText: { color: colors.primaryText, fontWeight: '800', fontSize: 14 },
 
   btnDanger: { flexDirection: 'row', backgroundColor: colors.danger, padding: 16, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   btnDangerText: { color: colors.dangerText, fontWeight: '800', fontSize: 14 },

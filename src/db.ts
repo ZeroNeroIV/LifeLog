@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// src/db.js  –  Life-Log  ·  SQLite persistence layer
+// src/db.ts  –  Life-Log  ·  SQLite persistence layer
 //
 // Compatible with expo-sqlite v15 / v16 (async API).
 // Uses a module-level singleton so the database is opened exactly once and
@@ -9,18 +9,143 @@
 
 import * as SQLite from "expo-sqlite";
 
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export type LogType = 'water' | 'caffeine' | 'mood' | 'focus' | 'vitamin_c' | 'sugar';
+export type MealType = 'meal' | 'snack';
+export type MessageRole = 'user' | 'assistant' | 'system';
+export type FoodSource = 'usda' | 'ai' | 'custom';
+export type FoodReportStatus = 'draft' | 'submitted' | 'resolved';
+
+export interface LogEntry {
+  id: number;
+  type: string;
+  value: number;
+  timestamp: number;
+}
+
+export interface WeeklyDataPoint {
+  date: string;
+  total: number;
+}
+
+export interface NutritionTotals {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  fiber: number;
+}
+
+export interface FoodItem {
+  id?: number;
+  fdc_id?: string | null;
+  name: string;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  fiber_g: number;
+  quantity_g: number;
+  source: FoodSource;
+}
+
+export interface FoodInput {
+  name: string;
+  fdcId?: string | null;
+  calories?: number;
+  proteinG?: number;
+  carbsG?: number;
+  fatG?: number;
+  fiberG?: number;
+  quantityG?: number;
+  source?: FoodSource;
+}
+
+export interface Meal {
+  id: number;
+  type: MealType;
+  timestamp: number;
+  notes: string | null;
+  foods: FoodItem[];
+}
+
+export interface MealRow {
+  meal_id: number;
+  meal_type: MealType;
+  meal_timestamp: number;
+  notes: string | null;
+  food_id: number | null;
+  fdc_id: string | null;
+  food_name: string | null;
+  calories: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  fiber_g: number | null;
+  quantity_g: number | null;
+  source: FoodSource | null;
+}
+
+export interface Conversation {
+  id: number;
+  summary: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface ConversationMessage {
+  id: number;
+  conversation_id: number;
+  role: MessageRole;
+  content: string;
+  timestamp: number;
+}
+
+export interface FoodReport {
+  id: number;
+  name: string;
+  ai_estimates: string | null;
+  ingredients: string | null;
+  photo_uri: string | null;
+  notes: string | null;
+  status: FoodReportStatus;
+  github_issue_url: string | null;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface FoodReportInput {
+  name: string;
+  aiEstimates?: string | null;
+  ingredients?: string | null;
+  photoUri?: string | null;
+  notes?: string | null;
+}
+
+export interface WeeklyNutritionPoint {
+  date: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
+export interface NutritionStreak {
+  currentStreak: number;
+  longestStreak: number;
+}
+
 // ─── Singleton ───────────────────────────────────────────────────────────────
 
-/** @type {SQLite.SQLiteDatabase | null} */
-let _db = null;
-let _dbPromise = null;
+let _db: SQLite.SQLiteDatabase | null = null;
+let _dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
 /**
  * Return the open database handle, opening (and bootstrapping) it on first call.
  * Uses a promise-based singleton to prevent concurrent open attempts.
- * @returns {Promise<SQLite.SQLiteDatabase>}
  */
-export const getDB = async () => {
+export const getDB = async (): Promise<SQLite.SQLiteDatabase> => {
   if (_db) return _db;
   if (!_dbPromise) {
     _dbPromise = (async () => {
@@ -35,43 +160,22 @@ export const getDB = async () => {
 
 // ─── Default Settings ────────────────────────────────────────────────────────
 
-/**
- * Seed values written with INSERT OR IGNORE so existing user edits are never
- * overwritten during subsequent app launches.
- *
- * Units:
- *   pomodoro_*         → minutes
- *   water_fav*_ml      → millilitres
- *   caffeine_fav*_mg   → milligrams
- *   mood_check_*       → boolean string / hour / minutes
- */
-const DEFAULT_SETTINGS = [
-  // ── Pomodoro ──────────────────────────────────────────────
+const DEFAULT_SETTINGS: [string, string][] = [
   ["pomodoro_work_minutes", "25"],
   ["pomodoro_break_minutes", "5"],
-
-  // ── Water quick-adds ──────────────────────────────────────
-  ["water_fav1_ml", "250"], // standard glass
-  ["water_fav2_ml", "500"], // large bottle cap
-
-  // ── Caffeine quick-adds ───────────────────────────────────
-  ["caffeine_fav1_mg", "80"], // ~1 espresso shot
-  ["caffeine_fav2_mg", "160"], // ~standard filter coffee
-
-  // ── Mood-check notification window ───────────────────────
+  ["water_fav1_ml", "250"],
+  ["water_fav2_ml", "500"],
+  ["caffeine_fav1_mg", "80"],
+  ["caffeine_fav2_mg", "160"],
   ["mood_check_enabled", "true"],
   ["mood_check_start_hour", "9"],
   ["mood_check_end_hour", "21"],
   ["mood_check_interval_minutes", "60"],
-
-  // ── Nutrition Goals ──────────────────────────────────────
   ["nutrition_calorie_goal", "2000"],
   ["nutrition_protein_goal", "50"],
   ["nutrition_carbs_goal", "250"],
   ["nutrition_fat_goal", "65"],
   ["nutrition_fiber_goal", "30"],
-
-  // ── LLM Model Settings ───────────────────────────────────
   ["llm_model_downloaded", "false"],
   ["llm_model_path", ""],
   ["usda_db_downloaded", "false"],
@@ -80,51 +184,24 @@ const DEFAULT_SETTINGS = [
 
 // ─── Schema & Migration ──────────────────────────────────────────────────────
 
-// Increment this constant whenever the schema changes.
-// The migration block below will detect the old version and upgrade cleanly.
 const SCHEMA_VERSION = 2;
 
-/**
- * Versioned migration runner.
- *
- * PRAGMA user_version is a free 32-bit integer stored in the SQLite file
- * header – perfect for cheap schema version checks with zero extra tables.
- *
- * Strategy:
- *   - Fresh DB            → user_version = 0  → run v1 migration
- *   - Broken/stale DB     → user_version = 0  → same path, drops old tables
- *   - Already on v1       → user_version = 1  → skip (no-op)
- *   - Future v2 migration → add an `if (v < 2)` block below
- *
- * The version stamp is written LAST so a crash mid-migration leaves the DB
- * at version 0 and the next launch retries from scratch.
- *
- * @param {SQLite.SQLiteDatabase} db
- */
-const _bootstrapSchema = async (db) => {
-  // WAL: concurrent reads do not block writes – much faster on mobile.
+const _bootstrapSchema = async (db: SQLite.SQLiteDatabase): Promise<void> => {
   await db.execAsync("PRAGMA journal_mode = WAL;");
   await db.execAsync("PRAGMA foreign_keys = ON;");
 
-  // Read the schema version from the database file header (default = 0).
-  const vRow = await db.getFirstAsync("PRAGMA user_version;");
+  const vRow = await db.getFirstAsync<{ user_version: number }>("PRAGMA user_version;");
   const installedVersion = vRow?.user_version ?? 0;
 
   if (installedVersion >= SCHEMA_VERSION) {
-    // Schema is already current – nothing to do.
     return;
   }
 
-  // ── Migration: v0 → v1 ───────────────────────────────────────────────────
-  // Only run for fresh installs (v=0). For existing v1 installs, skip to v2.
   if (installedVersion < 1) {
     await db.execAsync("DROP INDEX IF EXISTS idx_logs_type_ts;");
     await db.execAsync("DROP TABLE IF EXISTS logs;");
     await db.execAsync("DROP TABLE IF EXISTS settings;");
 
-    // logs: one row per metric event
-    //   type  = 'water' | 'caffeine' | 'mood' | 'focus' | 'vitamin_c' | 'sugar'
-    //   value = mL      | mg         | 1-5    | minutes | mg          | g
     await db.execAsync(
       `CREATE TABLE logs (
         id        INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -134,12 +211,10 @@ const _bootstrapSchema = async (db) => {
       );`,
     );
 
-    // Composite index for fast type + time-range queries
     await db.execAsync(
       `CREATE INDEX idx_logs_type_ts ON logs (type, timestamp);`,
     );
 
-    // settings: simple key-value store, values always stored as TEXT
     await db.execAsync(
       `CREATE TABLE settings (
         key   TEXT PRIMARY KEY NOT NULL,
@@ -147,7 +222,6 @@ const _bootstrapSchema = async (db) => {
       );`,
     );
 
-    // Seed default settings – INSERT OR IGNORE is safe to repeat
     for (const [key, value] of DEFAULT_SETTINGS) {
       await db.runAsync(
         "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?);",
@@ -158,11 +232,6 @@ const _bootstrapSchema = async (db) => {
     await db.execAsync("PRAGMA user_version = 1;");
   }
 
-  // ── Migration: v1 → v2 (Nutrition AI Feature) ────────────────────────────
-  // Adds tables for meals, AI chat, and food reporting.
-  // Runs for both fresh installs (v=0, now stamped v=1 above) and existing v1 installs.
-
-  // meals: Container for meal/snack entries
   await db.execAsync(
     `CREATE TABLE IF NOT EXISTS meals (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -175,7 +244,6 @@ const _bootstrapSchema = async (db) => {
     `CREATE INDEX IF NOT EXISTS idx_meals_timestamp ON meals (timestamp);`,
   );
 
-  // meal_foods: Individual food items within a meal
   await db.execAsync(
     `CREATE TABLE IF NOT EXISTS meal_foods (
       id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -195,7 +263,6 @@ const _bootstrapSchema = async (db) => {
     `CREATE INDEX IF NOT EXISTS idx_meal_foods_meal_id ON meal_foods (meal_id);`,
   );
 
-  // food_reports: User-submitted missing food reports (draft GitHub issues)
   await db.execAsync(
     `CREATE TABLE IF NOT EXISTS food_reports (
       id               INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -211,7 +278,6 @@ const _bootstrapSchema = async (db) => {
     );`,
   );
 
-  // ai_conversations: Chat session metadata with compacted summaries
   await db.execAsync(
     `CREATE TABLE IF NOT EXISTS ai_conversations (
       id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -221,7 +287,6 @@ const _bootstrapSchema = async (db) => {
     );`,
   );
 
-  // ai_messages: Individual messages within a conversation
   await db.execAsync(
     `CREATE TABLE IF NOT EXISTS ai_messages (
       id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -235,7 +300,6 @@ const _bootstrapSchema = async (db) => {
     `CREATE INDEX IF NOT EXISTS idx_ai_messages_conv_id ON ai_messages (conversation_id, timestamp);`,
   );
 
-  // Seed any new default settings for v2
   for (const [key, value] of DEFAULT_SETTINGS) {
     await db.runAsync(
       "INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?);",
@@ -243,8 +307,6 @@ const _bootstrapSchema = async (db) => {
     );
   }
 
-  // Stamp the final version LAST – if anything above throws, the next launch
-  // will find user_version < SCHEMA_VERSION and retry the migration cleanly.
   await db.execAsync(`PRAGMA user_version = ${SCHEMA_VERSION};`);
 };
 
@@ -252,13 +314,7 @@ const _bootstrapSchema = async (db) => {
 // PUBLIC API  –  Bootstrap
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Open the database and apply the schema.
- * Call once in the root layout (_layout.jsx) before rendering any screens.
- *
- * @returns {Promise<void>}
- */
-export const initializeDB = async () => {
+export const initializeDB = async (): Promise<void> => {
   await getDB();
 };
 
@@ -266,17 +322,7 @@ export const initializeDB = async () => {
 // PUBLIC API  –  Logs
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Append a new metric entry to the logs table.
- *
- * @param {'water' | 'caffeine' | 'mood' | 'focus' | 'vitamin_c' | 'sugar'} type
- * @param {number} value  –  mL / mg / 1-5 rating / minutes / mg / g
- * @returns {Promise<number>}  The newly inserted row id.
- *
- * @example
- *   const id = await addLog('water', 250);
- */
-export const addLog = async (type, value) => {
+export const addLog = async (type: LogType, value: number): Promise<number> => {
   const db = await getDB();
   const timestamp = Math.floor(Date.now() / 1000);
 
@@ -288,25 +334,13 @@ export const addLog = async (type, value) => {
   return result.lastInsertRowId;
 };
 
-/**
- * Return daily totals for the **last 7 days** for a given metric type,
- * sorted ascending by date so chart libraries can use the array directly.
- *
- * @param {'water' | 'caffeine' | 'mood' | 'focus' | 'vitamin_c' | 'sugar'} type
- * @returns {Promise<Array<{ date: string, total: number }>>}
- *   `date` is formatted 'YYYY-MM-DD' in the device's local timezone.
- *
- * @example
- *   const rows = await getWeeklyData('water');
- *   // → [{ date: '2025-05-01', total: 1750 }, …]
- */
-export const getWeeklyData = async (type) => {
+export const getWeeklyData = async (type: LogType): Promise<WeeklyDataPoint[]> => {
   const db = await getDB();
   const sevenDaysAgo = Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60;
   
   const aggregate = type === 'mood' ? 'AVG(value)' : 'SUM(value)';
 
-  return await db.getAllAsync(
+  return await db.getAllAsync<WeeklyDataPoint>(
     `SELECT
        strftime('%Y-%m-%d', datetime(timestamp, 'unixepoch', 'localtime')) AS date,
        ${aggregate} AS total
@@ -318,24 +352,13 @@ export const getWeeklyData = async (type) => {
   );
 };
 
-/**
- * Return the sum of all values logged **today** for a given type.
- * Returns 0 when no entries exist (never throws).
- *
- * @param {'water' | 'caffeine' | 'mood' | 'focus' | 'vitamin_c' | 'sugar'} type
- * @returns {Promise<number>}
- *
- * @example
- *   const total = await getTodayTotal('water');  // e.g. 750 (mL)
- */
-export const getTodayTotal = async (type) => {
+export const getTodayTotal = async (type: LogType): Promise<number> => {
   const db = await getDB();
-  // Floor to the start of the current calendar day in local time.
   const startOfDay = Math.floor(
     new Date(new Date().setHours(0, 0, 0, 0)).getTime() / 1000,
   );
 
-  const row = await db.getFirstAsync(
+  const row = await db.getFirstAsync<{ total: number }>(
     `SELECT COALESCE(SUM(value), 0) AS total
      FROM logs
      WHERE type = ? AND timestamp >= ?;`,
@@ -345,20 +368,13 @@ export const getTodayTotal = async (type) => {
   return row?.total ?? 0;
 };
 
-/**
- * Return all individual log entries for **today**, newest-first.
- * Useful for rendering a "Today's activity" list on the dashboard.
- *
- * @param {'water' | 'caffeine' | 'mood' | 'focus' | 'vitamin_c' | 'sugar'} type
- * @returns {Promise<Array<{ id: number, type: string, value: number, timestamp: number }>>}
- */
-export const getTodayLogs = async (type) => {
+export const getTodayLogs = async (type: LogType): Promise<LogEntry[]> => {
   const db = await getDB();
   const startOfDay = Math.floor(
     new Date(new Date().setHours(0, 0, 0, 0)).getTime() / 1000,
   );
 
-  return await db.getAllAsync(
+  return await db.getAllAsync<LogEntry>(
     `SELECT *
      FROM logs
      WHERE type = ? AND timestamp >= ?
@@ -367,37 +383,16 @@ export const getTodayLogs = async (type) => {
   );
 };
 
-/**
- * Permanently delete **every** log entry.
- * Used by the "Clear All Data" button.
- * 
- * This will delete:
- * - All logs (water, caffeine, mood, focus, vitamin_c, sugar)
- * - All meals and their associated foods
- * - All nutrition entries
- * - All conversation history
- * - Keep settings intact (user preferences are preserved)
- *
- * @returns {Promise<void>}
- */
-export const clearAllLogs = async () => {
+export const clearAllLogs = async (): Promise<void> => {
   const db = await getDB();
   
-  // Clear all tables in a transaction for consistency
   await db.withTransactionAsync(async () => {
-    // Clear logs (water, caffeine, mood, focus, etc.)
     await db.runAsync("DELETE FROM logs;");
-    
-    // Clear nutrition data (delete meal_foods first due to FK, then meals)
     await db.runAsync("DELETE FROM meal_foods;");
     await db.runAsync("DELETE FROM meals;");
     await db.runAsync("DELETE FROM food_reports;");
-    
-    // Clear conversation history
     await db.runAsync("DELETE FROM ai_messages;");
     await db.runAsync("DELETE FROM ai_conversations;");
-    
-    // Reset SQLite sequence counters for auto-increment IDs
     await db.runAsync("DELETE FROM sqlite_sequence WHERE name IN ('logs', 'meals', 'meal_foods', 'food_reports', 'ai_conversations', 'ai_messages');");
   });
 };
@@ -406,17 +401,7 @@ export const clearAllLogs = async () => {
 // PUBLIC API  –  Settings
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Upsert a single setting.  The value is coerced to a string for storage.
- *
- * @param {string} key
- * @param {string | number | boolean} value
- * @returns {Promise<void>}
- *
- * @example
- *   await updateSetting('pomodoro_work_minutes', 30);
- */
-export const updateSetting = async (key, value) => {
+export const updateSetting = async (key: string, value: string | number | boolean): Promise<void> => {
   const db = await getDB();
   await db.runAsync(
     "INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?);",
@@ -424,38 +409,18 @@ export const updateSetting = async (key, value) => {
   );
 };
 
-/**
- * Read a single setting by key.
- *
- * @param {string} key
- * @param {string | null} [defaultValue=null]  Returned when the key is absent.
- * @returns {Promise<string | null>}
- *
- * @example
- *   const minutes = await getSetting('pomodoro_work_minutes', '25');
- */
-export const getSetting = async (key, defaultValue = null) => {
+export const getSetting = async (key: string, defaultValue: string | null = null): Promise<string | null> => {
   const db = await getDB();
-  const row = await db.getFirstAsync(
+  const row = await db.getFirstAsync<{ value: string }>(
     "SELECT value FROM settings WHERE key = ?;",
     [key],
   );
   return row?.value ?? defaultValue;
 };
 
-/**
- * Load **all** settings into a plain object for bulk reads
- * (e.g., hydrating a Settings modal with a single await).
- *
- * @returns {Promise<Record<string, string>>}
- *
- * @example
- *   const cfg = await getAllSettings();
- *   console.log(cfg.pomodoro_work_minutes); // '25'
- */
-export const getAllSettings = async () => {
+export const getAllSettings = async (): Promise<Record<string, string>> => {
   const db = await getDB();
-  const rows = await db.getAllAsync("SELECT key, value FROM settings;");
+  const rows = await db.getAllAsync<{ key: string; value: string }>("SELECT key, value FROM settings;");
   return Object.fromEntries(rows.map(({ key, value }) => [key, value]));
 };
 
@@ -463,15 +428,7 @@ export const getAllSettings = async () => {
 // PUBLIC API  –  Meals & Nutrition
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Create a new meal/snack entry.
- *
- * @param {'meal' | 'snack'} type
- * @param {string} [notes]
- * @param {number} [timestamp] - Unix timestamp, defaults to now
- * @returns {Promise<number>} The newly inserted meal id.
- */
-export const createMeal = async (type, notes = null, timestamp = null) => {
+export const createMeal = async (type: MealType, notes: string | null = null, timestamp: number | null = null): Promise<number> => {
   const db = await getDB();
   const ts = timestamp ?? Math.floor(Date.now() / 1000);
   
@@ -483,23 +440,7 @@ export const createMeal = async (type, notes = null, timestamp = null) => {
   return result.lastInsertRowId;
 };
 
-/**
- * Add a food item to an existing meal.
- *
- * @param {number} mealId
- * @param {Object} food
- * @param {string} food.name
- * @param {string} [food.fdcId] - USDA FDC ID if from database
- * @param {number} [food.calories=0]
- * @param {number} [food.proteinG=0]
- * @param {number} [food.carbsG=0]
- * @param {number} [food.fatG=0]
- * @param {number} [food.fiberG=0]
- * @param {number} [food.quantityG=100]
- * @param {'usda' | 'ai' | 'custom'} [food.source='ai']
- * @returns {Promise<number>} The newly inserted meal_food id.
- */
-export const addFoodToMeal = async (mealId, food) => {
+export const addFoodToMeal = async (mealId: number, food: FoodInput): Promise<number> => {
   const db = await getDB();
   
   const result = await db.runAsync(
@@ -523,23 +464,17 @@ export const addFoodToMeal = async (mealId, food) => {
   return result.lastInsertRowId;
 };
 
-/**
- * Get a meal with all its food items.
- *
- * @param {number} mealId
- * @returns {Promise<Object | null>}
- */
-export const getMealWithFoods = async (mealId) => {
+export const getMealWithFoods = async (mealId: number): Promise<Meal | null> => {
   const db = await getDB();
   
-  const meal = await db.getFirstAsync(
+  const meal = await db.getFirstAsync<Meal>(
     "SELECT * FROM meals WHERE id = ?;",
     [mealId],
   );
   
   if (!meal) return null;
   
-  const foods = await db.getAllAsync(
+  const foods = await db.getAllAsync<FoodItem>(
     "SELECT * FROM meal_foods WHERE meal_id = ? ORDER BY id ASC;",
     [mealId],
   );
@@ -547,19 +482,13 @@ export const getMealWithFoods = async (mealId) => {
   return { ...meal, foods };
 };
 
-/**
- * Get all meals for today with their foods.
- *
- * @returns {Promise<Array>}
- */
-export const getTodayMeals = async () => {
+export const getTodayMeals = async (): Promise<Meal[]> => {
   const db = await getDB();
   const startOfDay = Math.floor(
     new Date(new Date().setHours(0, 0, 0, 0)).getTime() / 1000,
   );
   
-  // Single JOIN query instead of N+1 per-meal queries
-  const rows = await db.getAllAsync(
+  const rows = await db.getAllAsync<MealRow>(
     `SELECT 
        m.id AS meal_id, m.type AS meal_type, m.timestamp AS meal_timestamp, m.notes,
        mf.id AS food_id, mf.fdc_id, mf.name AS food_name, mf.calories, 
@@ -571,8 +500,7 @@ export const getTodayMeals = async () => {
     [startOfDay],
   );
 
-  // Group foods by meal
-  const mealsMap = new Map();
+  const mealsMap = new Map<number, Meal>();
   for (const row of rows) {
     if (!mealsMap.has(row.meal_id)) {
       mealsMap.set(row.meal_id, {
@@ -584,17 +512,17 @@ export const getTodayMeals = async () => {
       });
     }
     if (row.food_id) {
-      mealsMap.get(row.meal_id).foods.push({
+      mealsMap.get(row.meal_id)!.foods.push({
         id: row.food_id,
         fdc_id: row.fdc_id,
-        name: row.food_name,
-        calories: row.calories,
-        protein_g: row.protein_g,
-        carbs_g: row.carbs_g,
-        fat_g: row.fat_g,
-        fiber_g: row.fiber_g,
-        quantity_g: row.quantity_g,
-        source: row.source,
+        name: row.food_name!,
+        calories: row.calories!,
+        protein_g: row.protein_g!,
+        carbs_g: row.carbs_g!,
+        fat_g: row.fat_g!,
+        fiber_g: row.fiber_g!,
+        quantity_g: row.quantity_g!,
+        source: row.source!,
       });
     }
   }
@@ -602,18 +530,13 @@ export const getTodayMeals = async () => {
   return Array.from(mealsMap.values());
 };
 
-/**
- * Get nutrition totals for today.
- *
- * @returns {Promise<{ calories: number, protein: number, carbs: number, fat: number, fiber: number }>}
- */
-export const getTodayNutritionTotals = async () => {
+export const getTodayNutritionTotals = async (): Promise<NutritionTotals> => {
   const db = await getDB();
   const startOfDay = Math.floor(
     new Date(new Date().setHours(0, 0, 0, 0)).getTime() / 1000,
   );
   
-  const row = await db.getFirstAsync(
+  const row = await db.getFirstAsync<NutritionTotals>(
     `SELECT 
        COALESCE(SUM(mf.calories), 0) AS calories,
        COALESCE(SUM(mf.protein_g), 0) AS protein,
@@ -629,24 +552,12 @@ export const getTodayNutritionTotals = async () => {
   return row ?? { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 };
 };
 
-/**
- * Delete a meal and all its associated foods (cascade).
- *
- * @param {number} mealId
- * @returns {Promise<void>}
- */
-export const deleteMeal = async (mealId) => {
+export const deleteMeal = async (mealId: number): Promise<void> => {
   const db = await getDB();
   await db.runAsync("DELETE FROM meals WHERE id = ?;", [mealId]);
 };
 
-/**
- * Delete a specific food from a meal.
- *
- * @param {number} foodId
- * @returns {Promise<void>}
- */
-export const deleteFoodFromMeal = async (foodId) => {
+export const deleteFoodFromMeal = async (foodId: number): Promise<void> => {
   const db = await getDB();
   await db.runAsync("DELETE FROM meal_foods WHERE id = ?;", [foodId]);
 };
@@ -655,12 +566,7 @@ export const deleteFoodFromMeal = async (foodId) => {
 // PUBLIC API  –  AI Conversations
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Create a new AI conversation.
- *
- * @returns {Promise<number>} The newly inserted conversation id.
- */
-export const createConversation = async () => {
+export const createConversation = async (): Promise<number> => {
   const db = await getDB();
   const result = await db.runAsync(
     "INSERT INTO ai_conversations DEFAULT VALUES;",
@@ -668,15 +574,7 @@ export const createConversation = async () => {
   return result.lastInsertRowId;
 };
 
-/**
- * Add a message to a conversation.
- *
- * @param {number} conversationId
- * @param {'user' | 'assistant' | 'system'} role
- * @param {string} content
- * @returns {Promise<number>} The newly inserted message id.
- */
-export const addMessage = async (conversationId, role, content) => {
+export const addMessage = async (conversationId: number, role: MessageRole, content: string): Promise<number> => {
   const db = await getDB();
   
   const result = await db.runAsync(
@@ -684,7 +582,6 @@ export const addMessage = async (conversationId, role, content) => {
     [conversationId, role, content],
   );
   
-  // Update conversation's updated_at timestamp
   await db.runAsync(
     "UPDATE ai_conversations SET updated_at = strftime('%s', 'now') WHERE id = ?;",
     [conversationId],
@@ -693,40 +590,22 @@ export const addMessage = async (conversationId, role, content) => {
   return result.lastInsertRowId;
 };
 
-/**
- * Get all messages for a conversation.
- *
- * @param {number} conversationId
- * @returns {Promise<Array<{ id: number, role: string, content: string, timestamp: number }>>}
- */
-export const getConversationMessages = async (conversationId) => {
+export const getConversationMessages = async (conversationId: number): Promise<ConversationMessage[]> => {
   const db = await getDB();
-  return await db.getAllAsync(
+  return await db.getAllAsync<ConversationMessage>(
     "SELECT * FROM ai_messages WHERE conversation_id = ? ORDER BY timestamp ASC;",
     [conversationId],
   );
 };
 
-/**
- * Get the most recent conversation, or null if none exists.
- *
- * @returns {Promise<Object | null>}
- */
-export const getLatestConversation = async () => {
+export const getLatestConversation = async (): Promise<Conversation | null> => {
   const db = await getDB();
-  return await db.getFirstAsync(
+  return await db.getFirstAsync<Conversation>(
     "SELECT * FROM ai_conversations ORDER BY updated_at DESC LIMIT 1;",
   );
 };
 
-/**
- * Update a conversation's summary (for context compaction).
- *
- * @param {number} conversationId
- * @param {string} summary
- * @returns {Promise<void>}
- */
-export const updateConversationSummary = async (conversationId, summary) => {
+export const updateConversationSummary = async (conversationId: number, summary: string): Promise<void> => {
   const db = await getDB();
   await db.runAsync(
     "UPDATE ai_conversations SET summary = ?, updated_at = strftime('%s', 'now') WHERE id = ?;",
@@ -734,15 +613,7 @@ export const updateConversationSummary = async (conversationId, summary) => {
   );
 };
 
-/**
- * Delete old messages from a conversation, keeping only the most recent N.
- * Used for context compaction after summarization.
- *
- * @param {number} conversationId
- * @param {number} keepCount - Number of recent messages to retain
- * @returns {Promise<void>}
- */
-export const compactConversation = async (conversationId, keepCount = 10) => {
+export const compactConversation = async (conversationId: number, keepCount: number = 10): Promise<void> => {
   const db = await getDB();
   await db.runAsync(
     `DELETE FROM ai_messages 
@@ -761,18 +632,7 @@ export const compactConversation = async (conversationId, keepCount = 10) => {
 // PUBLIC API  –  Food Reports
 // ─────────────────────────────────────────────────────────────────────────────
 
-/**
- * Create a food report for a missing/unknown food item.
- *
- * @param {Object} report
- * @param {string} report.name
- * @param {string} [report.aiEstimates] - JSON string of AI-estimated nutrition
- * @param {string} [report.ingredients]
- * @param {string} [report.photoUri]
- * @param {string} [report.notes]
- * @returns {Promise<number>} The newly inserted report id.
- */
-export const createFoodReport = async (report) => {
+export const createFoodReport = async (report: FoodReportInput): Promise<number> => {
   const db = await getDB();
   
   const result = await db.runAsync(
@@ -790,26 +650,14 @@ export const createFoodReport = async (report) => {
   return result.lastInsertRowId;
 };
 
-/**
- * Get all pending (draft) food reports.
- *
- * @returns {Promise<Array>}
- */
-export const getPendingFoodReports = async () => {
+export const getPendingFoodReports = async (): Promise<FoodReport[]> => {
   const db = await getDB();
-  return await db.getAllAsync(
+  return await db.getAllAsync<FoodReport>(
     "SELECT * FROM food_reports WHERE status = 'draft' ORDER BY created_at DESC;",
   );
 };
 
-/**
- * Mark a food report as submitted and store the GitHub issue URL.
- *
- * @param {number} reportId
- * @param {string} githubIssueUrl
- * @returns {Promise<void>}
- */
-export const markFoodReportSubmitted = async (reportId, githubIssueUrl) => {
+export const markFoodReportSubmitted = async (reportId: number, githubIssueUrl: string): Promise<void> => {
   const db = await getDB();
   await db.runAsync(
     `UPDATE food_reports 
@@ -819,16 +667,11 @@ export const markFoodReportSubmitted = async (reportId, githubIssueUrl) => {
   );
 };
 
-/**
- * Get weekly nutrition totals for charts.
- *
- * @returns {Promise<Array<{ date: string, calories: number, protein: number, carbs: number, fat: number }>>}
- */
-export const getWeeklyNutritionData = async () => {
+export const getWeeklyNutritionData = async (): Promise<WeeklyNutritionPoint[]> => {
   const db = await getDB();
   const sevenDaysAgo = Math.floor(Date.now() / 1000) - 7 * 24 * 60 * 60;
 
-  return await db.getAllAsync(
+  return await db.getAllAsync<WeeklyNutritionPoint>(
     `SELECT 
        strftime('%Y-%m-%d', datetime(m.timestamp, 'unixepoch', 'localtime')) AS date,
        COALESCE(SUM(mf.calories), 0) AS calories,
@@ -844,26 +687,12 @@ export const getWeeklyNutritionData = async () => {
   );
 };
 
-/**
- * Calculate nutrition goal streak (consecutive days meeting calorie goal).
- *
- * @param {number} calorieGoal
- * @param {number} [tolerance=0.1] - Fraction below goal still counts (10% default)
- * @returns {Promise<{ currentStreak: number, longestStreak: number }>}
- */
-/**
- * Calculate nutrition goal streak (consecutive days meeting calorie goal).
- *
- * @param {number} calorieGoal
- * @param {number} [tolerance=0.1] - Fraction below goal still counts (10% default)
- * @returns {Promise<{ currentStreak: number, longestStreak: number }>}
- */
-export const getNutritionStreak = async (calorieGoal, tolerance = 0.1) => {
+export const getNutritionStreak = async (calorieGoal: number, tolerance: number = 0.1): Promise<NutritionStreak> => {
   const db = await getDB();
   const thirtyDaysAgo = Math.floor(Date.now() / 1000) - 30 * 24 * 60 * 60;
   const minCalories = calorieGoal * (1 - tolerance);
 
-  const data = await db.getAllAsync(
+  const data = await db.getAllAsync<{ date: string; calories: number }>(
     `SELECT 
        strftime('%Y-%m-%d', datetime(m.timestamp, 'unixepoch', 'localtime')) AS date,
        COALESCE(SUM(mf.calories), 0) AS calories
@@ -880,15 +709,12 @@ export const getNutritionStreak = async (calorieGoal, tolerance = 0.1) => {
   let tempStreak = 0;
   let streakBroken = false;
 
-  // Helper to get local date string (YYYY-MM-DD)
-  const getLocalDateString = (date) => {
+  const getLocalDateString = (date: Date): string => {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
     return `${year}-${month}-${day}`;
   };
-
-  const today = getLocalDateString(new Date());
   
   for (let i = 0; i < 30; i++) {
     const d = new Date();
@@ -904,7 +730,6 @@ export const getNutritionStreak = async (calorieGoal, tolerance = 0.1) => {
       longestStreak = Math.max(longestStreak, tempStreak);
     } else {
       if (i === 0) {
-        // Today doesn't count against streak if not over yet
         continue;
       }
       streakBroken = true;

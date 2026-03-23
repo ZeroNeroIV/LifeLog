@@ -1,14 +1,25 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
-import { Plus, X } from 'lucide-react-native';
+import { Plus, X, LucideIcon } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import BentoCard from './BentoCard';
-import { getTodayTotal, addLog } from '../db';
-import { useTheme } from '../theme';
+import { getTodayTotal, addLog, LogType } from '../db';
+import { useTheme, ThemeColors } from '../theme';
 
-export default function MetricBentoCard({ title, type, icon, color, unit, fav1, fav2, onUpdate }) {
+interface MetricBentoCardProps {
+  title: string;
+  type: LogType;
+  icon: LucideIcon;
+  color: string;
+  unit: string;
+  fav1: number;
+  fav2: number;
+  onUpdate?: () => void;
+}
+
+export default function MetricBentoCard({ title, type, icon, color, unit, fav1, fav2, onUpdate }: MetricBentoCardProps) {
   const { colors } = useTheme();
-  const s = getStyles(colors);
+  const s = useMemo(() => getStyles(colors), [colors]);
   const [total, setTotal] = useState(0);
   const [modalVisible, setModalVisible] = useState(false);
   const [customValue, setCustomValue] = useState('');
@@ -22,9 +33,9 @@ export default function MetricBentoCard({ title, type, icon, color, unit, fav1, 
     fetchTotal();
   }, []);
 
-  const handleAdd = async (value) => {
+  const handleAdd = async (value: number | string) => {
     try {
-      if (!value || isNaN(value)) return;
+      if (!value || isNaN(Number(value))) return;
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       await addLog(type, Number(value));
       await fetchTotal();
@@ -100,7 +111,7 @@ export default function MetricBentoCard({ title, type, icon, color, unit, fav1, 
   );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   btnRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
   addBtn: { flex: 1, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
   customBtn: { flex: 0.5 },
@@ -112,5 +123,5 @@ const getStyles = (colors) => StyleSheet.create({
   closeBtn: { padding: 8, backgroundColor: colors.surfaceInput, borderRadius: 12 },
   input: { backgroundColor: colors.surfaceInput, borderRadius: 16, padding: 16, fontSize: 24, fontWeight: '700', color: colors.text, marginBottom: 24, borderWidth: 1, borderColor: colors.surfaceBorder, textAlign: 'center' },
   submitBtn: { paddingVertical: 18, borderRadius: 100, alignItems: 'center' },
-  submitText: { color: colors.primaryText, fontSize: 16, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1 },
+  submitText: { color: '#00363e', fontSize: 16, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1 },
 });

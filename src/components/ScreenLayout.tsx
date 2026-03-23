@@ -1,19 +1,23 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// src/components/ScreenLayout.jsx  –  Global Screen Layout Wrapper
-// 
-// Provides consistent top bar and accounts for bottom tab bar height
+// src/components/ScreenLayout.tsx  –  Global Screen Layout Wrapper
 // ─────────────────────────────────────────────────────────────────────────────
 
-import React from 'react';
+import React, { ReactNode, useMemo } from 'react';
 import { View, Text, StyleSheet, Platform, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useTheme } from '../theme';
+import { useTheme, ThemeColors } from '../theme';
 
-const TAB_BAR_HEIGHT = 60; // Height of bottom tab bar
+const TAB_BAR_HEIGHT = 60;
 
-export default function ScreenLayout({ title, children, showTopBar = true }) {
+interface ScreenLayoutProps {
+  title?: string;
+  children: ReactNode;
+  showTopBar?: boolean;
+}
+
+export default function ScreenLayout({ title, children, showTopBar = true }: ScreenLayoutProps) {
   const { colors, isDark } = useTheme();
-  const s = getStyles(colors);
+  const s = useMemo(() => getStyles(colors), [colors]);
 
   return (
     <SafeAreaView style={s.safe} edges={['top']}>
@@ -25,7 +29,6 @@ export default function ScreenLayout({ title, children, showTopBar = true }) {
         </View>
       )}
       
-      {/* Content area that accounts for tab bar */}
       <View style={s.content}>
         {children}
       </View>
@@ -33,7 +36,7 @@ export default function ScreenLayout({ title, children, showTopBar = true }) {
   );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   safe: {
     flex: 1,
     backgroundColor: colors.background,
@@ -57,6 +60,6 @@ const getStyles = (colors) => StyleSheet.create({
   },
   content: {
     flex: 1,
-    paddingBottom: TAB_BAR_HEIGHT + 10, // Account for tab bar + spacing
+    paddingBottom: TAB_BAR_HEIGHT + 10,
   },
 });

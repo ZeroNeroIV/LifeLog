@@ -1,20 +1,24 @@
-// src/components/ModelDownloadCard.jsx - LLM Model Download UI
-import React, { useState, useEffect } from 'react';
+// src/components/ModelDownloadCard.tsx - LLM Model Download UI
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Download, CheckCircle, AlertCircle, Trash2, HardDrive } from 'lucide-react-native';
-import { useTheme } from '../theme';
-import { getModelInfo, downloadModel, deleteModel, formatBytes, checkSpaceForDownload, getModelSizes } from '../services/llm/modelDownload';
+import { useTheme, ThemeColors } from '../theme';
+import { getModelInfo, downloadModel, deleteModel, formatBytes, checkSpaceForDownload, getModelSizes, DownloadProgress } from '../services/llm/modelDownload';
 
-export default function ModelDownloadCard({ onModelReady }) {
+interface ModelDownloadCardProps {
+  onModelReady?: (ready: boolean) => void;
+}
+
+export default function ModelDownloadCard({ onModelReady }: ModelDownloadCardProps) {
   const { colors } = useTheme();
-  const s = getStyles(colors);
+  const s = useMemo(() => getStyles(colors), [colors]);
   
-  const [status, setStatus] = useState('checking'); // checking | not_downloaded | downloading | ready | error | no_space
+  const [status, setStatus] = useState<string>('checking');
   const [progress, setProgress] = useState(0);
   const [downloadedBytes, setDownloadedBytes] = useState(0);
   const [totalBytes, setTotalBytes] = useState(0);
-  const [error, setError] = useState(null);
-  const [spaceInfo, setSpaceInfo] = useState(null);
+  const [error, setError] = useState<string | null>(null);
+  const [spaceInfo, setSpaceInfo] = useState<{ hasSpace: boolean; available: number; required: number } | null>(null);
 
   useEffect(() => { checkModelStatus(); }, []);
 
@@ -31,16 +35,16 @@ export default function ModelDownloadCard({ onModelReady }) {
         setStatus(space.hasSpace ? 'not_downloaded' : 'no_space');
       }
     } catch (e) {
-      setError(e.message);
+      setError((e as Error).message);
       setStatus('error');
     }
   };
 
-  const handleDownload = async (modelType = 'primary') => {
+  const handleDownload = async (modelType: 'primary' | 'fallback' = 'primary') => {
     setStatus('downloading');
     setError(null);
     try {
-      await downloadModel((p) => {
+      await downloadModel((p: DownloadProgress) => {
         setProgress(p.progress);
         setDownloadedBytes(p.downloadedBytes);
         setTotalBytes(p.totalBytes);
@@ -48,12 +52,12 @@ export default function ModelDownloadCard({ onModelReady }) {
           setStatus('ready');
           onModelReady?.(true);
         } else if (p.status === 'error') {
-          setError(p.error);
+          setError(p.error ?? 'Unknown error');
           setStatus('error');
         }
       }, modelType);
     } catch (e) {
-      setError(e.message);
+      setError((e as Error).message);
       setStatus('error');
     }
   };
@@ -64,7 +68,7 @@ export default function ModelDownloadCard({ onModelReady }) {
       onModelReady?.(false);
       checkModelStatus();
     } catch (e) {
-      setError(e.message);
+      setError((e as Error).message);
     }
   };
 
@@ -154,7 +158,7 @@ export default function ModelDownloadCard({ onModelReady }) {
   );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   card: { backgroundColor: colors.surface, borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: colors.surfaceBorder },
   header: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
   title: { fontSize: 14, fontWeight: '700', color: colors.text, letterSpacing: 1 },

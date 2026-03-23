@@ -3,7 +3,7 @@ import { useFocusEffect } from 'expo-router';
 import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import MetricsChart from '../src/components/MetricsChart';
 import NutritionChart from '../src/components/NutritionChart';
-import { useTheme } from '../src/theme';
+import { useTheme, ThemeColors } from '../src/theme';
 import ScreenLayout from '../src/components/ScreenLayout';
 
 export default function PerformanceScreen() {
@@ -13,7 +13,6 @@ export default function PerformanceScreen() {
 
   useFocusEffect(
     useCallback(() => {
-      // Forcibly refresh chart data queries exactly when the tab is snapped into focus
       setRefreshKey(prev => prev + 1);
     }, [])
   );
@@ -72,9 +71,9 @@ export default function PerformanceScreen() {
   );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   scroll: { padding: 24 },
   header: { marginBottom: 32, marginTop: 8 },
   greeting: { fontSize: 32, fontWeight: '800', color: colors.text, letterSpacing: -1 },
-  date: { fontSize: 14, color: colors.primary, marginTop: 6, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1 },
+  date: { fontSize: 14, color: colors.primary, marginTop: 6, fontWeight: '800', textTransform: 'uppercase' as const, letterSpacing: 1 },
 });

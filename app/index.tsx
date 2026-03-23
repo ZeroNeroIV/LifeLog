@@ -2,7 +2,7 @@ import React, { useState, useCallback, useRef, useMemo } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, ScrollView } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { getAllSettings, getTodayTotal, getTodayNutritionTotals, getNutritionStreak } from '../src/db';
-import { useTheme } from '../src/theme';
+import { useTheme, ThemeColors } from '../src/theme';
 import ScreenLayout from '../src/components/ScreenLayout';
 import BentoCard from '../src/components/BentoCard';
 import { Quote, Flame, Apple, Trophy } from 'lucide-react-native';
@@ -23,7 +23,7 @@ export default function HomeScreen() {
   const [quote, setQuote] = useState('');
   const [author, setAuthor] = useState('');
   const [fetchingQuote, setFetchingQuote] = useState(false);
-  const [quoteLoaded, setQuoteLoaded] = useState(false); // Track if quote has been loaded
+  const [quoteLoaded, setQuoteLoaded] = useState(false);
   const quoteLoadedRef = useRef(false);
 
   const [focusTotal, setFocusTotal] = useState(0);
@@ -32,7 +32,7 @@ export default function HomeScreen() {
   const [streak, setStreak] = useState({ currentStreak: 0, longestStreak: 0 });
 
   const fetchQuote = useCallback(async () => {
-    if (quoteLoaded) return; // Don't fetch if already loaded
+    if (quoteLoaded) return;
     
     setFetchingQuote(true);
     try {
@@ -79,7 +79,6 @@ export default function HomeScreen() {
       const streakData = await getNutritionStreak(goal);
       setStreak(streakData);
 
-      // Only fetch quote once
       if (!quoteLoadedRef.current) {
         fetchQuote();
       }
@@ -153,14 +152,14 @@ export default function HomeScreen() {
   );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { padding: 24 },
   header: { marginBottom: 32, marginTop: 8 },
   greeting: { fontSize: 32, fontWeight: '800', color: colors.text, letterSpacing: -1 },
-  date: { fontSize: 14, color: colors.primary, marginTop: 6, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase' },
+  date: { fontSize: 14, color: colors.primary, marginTop: 6, fontWeight: '800', letterSpacing: 1, textTransform: 'uppercase' as const },
   quoteBox: { marginTop: 12, paddingVertical: 8, minHeight: 80, justifyContent: 'center' },
   quoteText: { fontSize: 20, fontStyle: 'italic', lineHeight: 28, fontWeight: '600', marginBottom: 12 },
-  quoteAuthor: { fontSize: 14, fontWeight: '800', textAlign: 'right', textTransform: 'uppercase', letterSpacing: 1 },
+  quoteAuthor: { fontSize: 14, fontWeight: '800', textAlign: 'right', textTransform: 'uppercase' as const, letterSpacing: 1 },
   focusText: { fontSize: 16, color: colors.text, lineHeight: 24, fontWeight: '600', marginTop: 12 },
   nutritionBox: { flexDirection: 'row', alignItems: 'center', gap: 20, marginTop: 12 },
   calorieCircle: { alignItems: 'center' },

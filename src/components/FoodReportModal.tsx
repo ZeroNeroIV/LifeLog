@@ -1,20 +1,26 @@
-// src/components/FoodReportModal.jsx - Report Missing Foods
-import React, { useState } from 'react';
+// src/components/FoodReportModal.tsx - Report Missing Foods
+import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, Modal, Image, ScrollView, Alert } from 'react-native';
 import { X, Camera, Send, AlertTriangle } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { useTheme } from '../theme';
+import { useTheme, ThemeColors } from '../theme';
 import { createFoodReport } from '../db';
 import * as Haptics from 'expo-haptics';
 
-export default function FoodReportModal({ visible, onClose, initialName = '' }) {
+interface FoodReportModalProps {
+  visible: boolean;
+  onClose: () => void;
+  initialName?: string;
+}
+
+export default function FoodReportModal({ visible, onClose, initialName = '' }: FoodReportModalProps) {
   const { colors } = useTheme();
-  const s = getStyles(colors);
+  const s = useMemo(() => getStyles(colors), [colors]);
   
   const [name, setName] = useState(initialName);
   const [ingredients, setIngredients] = useState('');
   const [notes, setNotes] = useState('');
-  const [photoUri, setPhotoUri] = useState(null);
+  const [photoUri, setPhotoUri] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const pickImage = async () => {
@@ -25,7 +31,7 @@ export default function FoodReportModal({ visible, onClose, initialName = '' }) 
     }
 
     const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [4, 3],
       quality: 0.7,
@@ -44,7 +50,7 @@ export default function FoodReportModal({ visible, onClose, initialName = '' }) 
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       allowsEditing: true,
       aspect: [4, 3],
       quality: 0.7,
@@ -70,7 +76,7 @@ export default function FoodReportModal({ visible, onClose, initialName = '' }) 
         ingredients: ingredients.trim() || null,
         notes: notes.trim() || null,
         photoUri: photoUri,
-        aiEstimates: null, // Could be populated by AI later
+        aiEstimates: null,
       });
 
       Alert.alert(
@@ -79,7 +85,7 @@ export default function FoodReportModal({ visible, onClose, initialName = '' }) 
         [{ text: 'OK', onPress: handleClose }]
       );
     } catch (e) {
-      Alert.alert('Error', 'Failed to save report: ' + e.message);
+      Alert.alert('Error', 'Failed to save report: ' + (e as Error).message);
     }
 
     setSubmitting(false);
@@ -183,7 +189,7 @@ export default function FoodReportModal({ visible, onClose, initialName = '' }) 
   );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modal: { backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '90%' },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: colors.surfaceBorder },
@@ -191,7 +197,7 @@ const getStyles = (colors) => StyleSheet.create({
   title: { fontSize: 18, fontWeight: '700', color: colors.text },
   content: { padding: 16 },
   description: { fontSize: 13, color: colors.textMuted, lineHeight: 20, marginBottom: 20 },
-  label: { fontSize: 12, fontWeight: '700', color: colors.textDim, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8, marginTop: 12 },
+  label: { fontSize: 12, fontWeight: '700', color: colors.textDim, textTransform: 'uppercase' as const, letterSpacing: 1, marginBottom: 8, marginTop: 12 },
   input: { backgroundColor: colors.surfaceInput, borderRadius: 12, padding: 14, fontSize: 15, color: colors.text, borderWidth: 1, borderColor: colors.surfaceBorder },
   textArea: { minHeight: 80, textAlignVertical: 'top' },
   photoContainer: { position: 'relative', marginTop: 8 },

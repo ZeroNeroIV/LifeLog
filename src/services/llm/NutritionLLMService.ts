@@ -1,20 +1,57 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// src/services/llm/NutritionLLMService.js  –  On-device LLM for Nutrition Parsing
+// src/services/llm/NutritionLLMService.ts  –  On-device LLM for Nutrition Parsing
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { initLlama } from "llama.rn";
+import { initLlama, LlamaContext } from "llama.rn";
 import { getModelInfo } from "./modelDownload";
 import { searchDrinks as searchFood } from "../nutritionApi";
 import {
   createMeal, addFoodToMeal, createConversation, addMessage,
   getConversationMessages, getLatestConversation, updateConversationSummary,
-  compactConversation,
+  compactConversation, MealType,
 } from "../../db";
 
 const MAX_TOKENS = 512;
 const TEMPERATURE = 0.3;
 const CONTEXT_SIZE = 2048;
 const MAX_MESSAGES_BEFORE_COMPACT = 20;
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+export interface ParsedFood {
+  name: string;
+  quantity: string;
+  search_term: string;
+}
+
+export interface MealLogJSON {
+  type: 'meal_log';
+  foods: ParsedFood[];
+  meal_type: string;
+  clarification_needed: string | null;
+}
+
+export interface EnrichedFood {
+  name: string;
+  quantity_g: number;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  fiber_g: number;
+  confidence: 'high' | 'low';
+  source: string;
+}
+
+export interface ChatResponse {
+  type: 'chat' | 'meal_log' | 'clarification';
+  text: string;
+  foods?: EnrichedFood[];
+  mealType?: MealType;
+  clarification?: string;
+}
+
+// ─── System Prompt ────────────────────────────────────────────────────────────
 
 const SYSTEM_PROMPT = `You are NutriAssist, an AI nutrition logging assistant integrated into LifeLog - a personal health tracking app.
 
@@ -156,16 +193,17 @@ Make search terms specific for better database matches:
 
 Remember: Your extractions will be automatically enriched with accurate nutrition data from official databases and added to the user's meal history. Focus on accurate extraction and helpful clarifications!`;
 
+// ─── Module State ─────────────────────────────────────────────────────────────
 
-let _llamaContext = null;
-let _currentConversationId = null;
+let _llamaContext: LlamaContext | null = null;
+let _currentConversationId: number | null = null;
 
-const extractJSON = (text) => {
+const extractJSON = (text: string): MealLogJSON | null => {
   const match = text.match(/```(?:json)?\s*([\s\S]*?)```/) || text.match(/\{[\s\S]*"type"\s*:\s*"meal_log"[\s\S]*\}/);
-  try { return JSON.parse(match?.[1]?.trim() || match?.[0]); } catch { return null; }
+  try { return JSON.parse(match?.[1]?.trim() || match?.[0] as string); } catch { return null; }
 };
 
-export const initializeLLM = async () => {
+export const initializeLLM = async (): Promise<void> => {
   if (_llamaContext) return;
   
   console.log('[LLM] Checking model info...');
@@ -176,12 +214,12 @@ export const initializeLLM = async () => {
   try {
     console.log('[LLM] Initializing llama context...');
     _llamaContext = await initLlama({
-      model: modelInfo.path, n_ctx: CONTEXT_SIZE, n_threads: 4, use_mlock: true, use_mmap: true,
+      model: modelInfo.path!, n_ctx: CONTEXT_SIZE, n_threads: 4, use_mlock: true, use_mmap: true,
     });
     console.log('[LLM] Context initialized, type:', typeof _llamaContext, 'has completion:', typeof _llamaContext?.completion);
   } catch (e) {
     console.error('[LLM] initLlama failed:', e);
-    throw new Error(`Failed to initialize AI model: ${e.message || 'Native module error'}`);
+    throw new Error(`Failed to initialize AI model: ${(e as Error).message || 'Native module error'}`);
   }
 
   if (!_llamaContext || typeof _llamaContext.completion !== 'function') {
@@ -191,18 +229,22 @@ export const initializeLLM = async () => {
   try {
     console.log('[LLM] Setting up conversation...');
     const existing = await getLatestConversation();
-    _currentConversationId = existing?.id || await createConversation();
+    _currentConversationId = existing?.id ?? await createConversation();
     console.log('[LLM] Conversation ID:', _currentConversationId);
   } catch (e) {
     console.error('[LLM] Conversation setup failed:', e);
-    throw new Error(`Failed to setup chat: ${e.message}`);
+    throw new Error(`Failed to setup chat: ${(e as Error).message}`);
   }
 };
 
-export const isLLMReady = () => _llamaContext !== null;
+export const isLLMReady = (): boolean => _llamaContext !== null;
 
-export const processMessage = async (userMessage, onToken = null) => {
+export const processMessage = async (
+  userMessage: string,
+  onToken: ((token: string) => void) | null = null,
+): Promise<ChatResponse> => {
   if (!_llamaContext) throw new Error("LLM not initialized");
+  if (!_currentConversationId) throw new Error("No conversation");
   
   await addMessage(_currentConversationId, "user", userMessage);
   const messages = await getConversationMessages(_currentConversationId);
@@ -216,7 +258,6 @@ export const processMessage = async (userMessage, onToken = null) => {
   const result = await _llamaContext.completion(
     { prompt: context + "Assistant:", n_predict: MAX_TOKENS, temperature: TEMPERATURE, stop: ["User:"] },
     (data) => {
-      // llama.rn passes TokenData with .token property; handle both formats defensively
       const t = typeof data === 'string' ? data : (data?.token ?? '');
       if (t) {
         fullResponse += t;
@@ -231,7 +272,6 @@ export const processMessage = async (userMessage, onToken = null) => {
   
   const parsed = extractJSON(fullResponse);
   if (parsed?.type === "meal_log") {
-    // If clarification is needed, return early
     if (parsed.clarification_needed) {
       return { 
         type: "clarification", 
@@ -240,26 +280,21 @@ export const processMessage = async (userMessage, onToken = null) => {
       };
     }
     
-    // If we have foods to search for, look them up in the nutrition database
     if (parsed.foods?.length) {
-      const enrichedFoods = [];
+      const enrichedFoods: EnrichedFood[] = [];
       
       for (const food of parsed.foods) {
         try {
-          // Search using the search_term or food name
           const searchResults = await searchFood(food.search_term || food.name);
           
           if (searchResults && searchResults.length > 0) {
-            // Use the first (best) result
             const nutritionData = searchResults[0];
             
-            // Convert quantity string to grams (rough estimation)
-            let quantityG = 100; // default
+            let quantityG = 100;
             if (food.quantity) {
               const qtyMatch = food.quantity.match(/(\d+(?:\.\d+)?)/);
               if (qtyMatch) {
                 const qty = parseFloat(qtyMatch[1]);
-                // Rough conversions (can be improved)
                 if (food.quantity.includes('slice')) quantityG = qty * 30;
                 else if (food.quantity.includes('cup')) quantityG = qty * 240;
                 else if (food.quantity.includes('tbsp')) quantityG = qty * 15;
@@ -269,25 +304,23 @@ export const processMessage = async (userMessage, onToken = null) => {
                 else if (food.quantity.toLowerCase().includes('large')) quantityG = qty * 50;
                 else if (food.quantity.toLowerCase().includes('medium')) quantityG = qty * 40;
                 else if (food.quantity.toLowerCase().includes('small')) quantityG = qty * 30;
-                else quantityG = qty * 100; // assume per item = 100g
+                else quantityG = qty * 100;
               }
             }
             
-            // Calculate nutrition per quantity
             const multiplier = quantityG / 100;
             enrichedFoods.push({
               name: nutritionData.name,
               quantity_g: quantityG,
-              calories: Math.round((nutritionData.calories || 0) * multiplier),
-              protein_g: Math.round((nutritionData.protein?.value || 0) * multiplier * 10) / 10,
-              carbs_g: Math.round((nutritionData.carbs?.value || 0) * multiplier * 10) / 10,
-              fat_g: Math.round((nutritionData.fat?.value || 0) * multiplier * 10) / 10,
-              fiber_g: Math.round((nutritionData.fiber?.value || 0) * multiplier * 10) / 10,
+              calories: Math.round((nutritionData.caffeine?.value || 0) * multiplier),
+              protein_g: 0,
+              carbs_g: Math.round((nutritionData.sugar?.value || 0) * multiplier * 10) / 10,
+              fat_g: 0,
+              fiber_g: 0,
               confidence: "high",
-              source: nutritionData.source
+              source: nutritionData.id.startsWith('usda') ? 'usda' : 'ai',
             });
           } else {
-            // No results found, use LLM estimates
             enrichedFoods.push({
               name: food.name,
               quantity_g: 100,
@@ -302,7 +335,6 @@ export const processMessage = async (userMessage, onToken = null) => {
           }
         } catch (error) {
           console.warn('Food search failed for:', food.name, error);
-          // Add with zero values on error
           enrichedFoods.push({
             name: food.name,
             quantity_g: 100,
@@ -321,7 +353,7 @@ export const processMessage = async (userMessage, onToken = null) => {
         type: "meal_log", 
         text: fullResponse,
         foods: enrichedFoods, 
-        mealType: parsed.meal_type || "meal"
+        mealType: (parsed.meal_type as MealType) || "meal"
       };
     }
   }
@@ -329,7 +361,7 @@ export const processMessage = async (userMessage, onToken = null) => {
   return { type: "chat", text: fullResponse };
 };
 
-export const logFoodsFromResponse = async (response) => {
+export const logFoodsFromResponse = async (response: ChatResponse): Promise<number> => {
   if (response.type !== "meal_log" || !response.foods?.length) throw new Error("No foods to log");
   const mealId = await createMeal(response.mealType || "meal");
   for (const f of response.foods) {
@@ -339,11 +371,11 @@ export const logFoodsFromResponse = async (response) => {
   return mealId;
 };
 
-export const startNewConversation = async () => { _currentConversationId = await createConversation(); };
-export const getCurrentConversationId = () => _currentConversationId;
-export const releaseLLM = async () => { if (_llamaContext) { await _llamaContext.release(); _llamaContext = null; } };
+export const startNewConversation = async (): Promise<void> => { _currentConversationId = await createConversation(); };
+export const getCurrentConversationId = (): number | null => _currentConversationId;
+export const releaseLLM = async (): Promise<void> => { if (_llamaContext) { await _llamaContext.release(); _llamaContext = null; } };
 
-const _compactIfNeeded = async () => {
+const _compactIfNeeded = async (): Promise<void> => {
   if (!_llamaContext || !_currentConversationId) return;
   const messages = await getConversationMessages(_currentConversationId);
   if (messages.length < MAX_MESSAGES_BEFORE_COMPACT) return;

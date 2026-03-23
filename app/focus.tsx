@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { View, StyleSheet } from 'react-native';
 import PomodoroTimer from '../src/components/PomodoroTimer';
-import { useTheme } from '../src/theme';
+import { useTheme, ThemeColors } from '../src/theme';
 import ScreenLayout from '../src/components/ScreenLayout';
 
 export default function FocusScreen() {
@@ -16,6 +16,6 @@ export default function FocusScreen() {
   );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1, padding: 24, justifyContent: 'center' },
 });

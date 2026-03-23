@@ -1,21 +1,25 @@
-// src/components/MealHistoryCard.jsx - Today's Meals List
+// src/components/MealHistoryCard.tsx - Today's Meals List
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, FlatList } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { ChevronDown, ChevronUp, Trash2, Utensils, Cookie } from 'lucide-react-native';
-import { useTheme } from '../theme';
-import { getTodayMeals, deleteMeal, deleteFoodFromMeal } from '../db';
+import { useTheme, ThemeColors } from '../theme';
+import { getTodayMeals, deleteMeal, deleteFoodFromMeal, Meal } from '../db';
 import * as Haptics from 'expo-haptics';
 
-export default function MealHistoryCard({ onUpdate, refreshKey }) {
+interface MealHistoryCardProps {
+  onUpdate?: () => void;
+  refreshKey?: number;
+}
+
+export default function MealHistoryCard({ onUpdate, refreshKey }: MealHistoryCardProps) {
   const { colors } = useTheme();
   const s = useMemo(() => getStyles(colors), [colors]);
-  const [meals, setMeals] = useState([]);
-  const [expanded, setExpanded] = useState({});
+  const [meals, setMeals] = useState<Meal[]>([]);
+  const [expanded, setExpanded] = useState<Record<number, boolean>>({});
 
   useFocusEffect(useCallback(() => { loadMeals(); }, []));
   
-  // Reload when refreshKey changes (when food is added)
   useEffect(() => {
     if (refreshKey !== undefined) {
       loadMeals();
@@ -27,28 +31,28 @@ export default function MealHistoryCard({ onUpdate, refreshKey }) {
     setMeals(data);
   };
 
-  const toggleExpand = (id) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
+  const toggleExpand = (id: number) => setExpanded(prev => ({ ...prev, [id]: !prev[id] }));
 
-  const handleDeleteMeal = async (id) => {
+  const handleDeleteMeal = async (id: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     await deleteMeal(id);
     loadMeals();
     onUpdate?.();
   };
 
-  const handleDeleteFood = async (foodId) => {
+  const handleDeleteFood = async (foodId: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     await deleteFoodFromMeal(foodId);
     loadMeals();
     onUpdate?.();
   };
 
-  const formatTime = (ts) => {
+  const formatTime = (ts: number) => {
     const d = new Date(ts * 1000);
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  const getMealCalories = (foods) => foods.reduce((sum, f) => sum + (f.calories || 0), 0);
+  const getMealCalories = (foods: Meal['foods']) => foods.reduce((sum, f) => sum + (f.calories || 0), 0);
 
   if (meals.length === 0) {
     return (
@@ -59,7 +63,7 @@ export default function MealHistoryCard({ onUpdate, refreshKey }) {
     );
   }
 
-  const renderMeal = ({ item: meal }) => {
+  const renderMeal = ({ item: meal }: { item: Meal }) => {
     const isExpanded = expanded[meal.id];
     const Icon = meal.type === 'snack' ? Cookie : Utensils;
     const calories = getMealCalories(meal.foods || []);
@@ -88,7 +92,7 @@ export default function MealHistoryCard({ onUpdate, refreshKey }) {
                     {Math.round(food.calories)}cal · {Math.round(food.protein_g)}p · {Math.round(food.carbs_g)}c · {Math.round(food.fat_g)}f
                   </Text>
                 </View>
-                <TouchableOpacity onPress={() => handleDeleteFood(food.id)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <TouchableOpacity onPress={() => handleDeleteFood(food.id!)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                   <Trash2 size={14} color={colors.danger} />
                 </TouchableOpacity>
               </View>
@@ -116,7 +120,7 @@ export default function MealHistoryCard({ onUpdate, refreshKey }) {
   );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { marginTop: 8 },
   title: { fontSize: 11, fontWeight: '700', color: colors.textDim, letterSpacing: 1, marginBottom: 8, paddingHorizontal: 12 },
   emptyContainer: { alignItems: 'center', padding: 24 },
@@ -125,7 +129,7 @@ const getStyles = (colors) => StyleSheet.create({
   mealCard: { backgroundColor: colors.surface, marginHorizontal: 12, marginBottom: 8, borderRadius: 12, borderWidth: 1, borderColor: colors.surfaceBorder, overflow: 'hidden' },
   mealHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12 },
   mealInfo: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  mealType: { fontSize: 14, fontWeight: '600', color: colors.text, textTransform: 'capitalize' },
+  mealType: { fontSize: 14, fontWeight: '600', color: colors.text, textTransform: 'capitalize' as const },
   mealTime: { fontSize: 12, color: colors.textDim },
   mealRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   mealCal: { fontSize: 13, fontWeight: '600', color: colors.primary },

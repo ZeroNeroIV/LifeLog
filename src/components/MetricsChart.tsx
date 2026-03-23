@@ -1,14 +1,27 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { View, StyleSheet, Text, ActivityIndicator } from 'react-native';
 import { LineChart } from 'react-native-gifted-charts';
-import { getWeeklyData } from '../db';
-import { useTheme } from '../theme';
+import { getWeeklyData, LogType } from '../db';
+import { useTheme, ThemeColors } from '../theme';
 
-export default function MetricsChart({ title, type, color, unit, refreshKey }) {
+interface ChartDataPoint {
+  value: number;
+  label: string;
+}
+
+interface MetricsChartProps {
+  title: string;
+  type: LogType;
+  color: string;
+  unit: string;
+  refreshKey?: number;
+}
+
+export default function MetricsChart({ title, type, color, unit, refreshKey }: MetricsChartProps) {
   const { colors } = useTheme();
-  const s = getStyles(colors);
+  const s = useMemo(() => getStyles(colors), [colors]);
   
-  const [data, setData] = useState([]);
+  const [data, setData] = useState<ChartDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -20,7 +33,7 @@ export default function MetricsChart({ title, type, color, unit, refreshKey }) {
     try {
       const records = await getWeeklyData(type);
       
-      const chartData = [];
+      const chartData: ChartDataPoint[] = [];
       for (let i = 6; i >= 0; i--) {
         const d = new Date();
         d.setDate(d.getDate() - i);
@@ -29,7 +42,7 @@ export default function MetricsChart({ title, type, color, unit, refreshKey }) {
         const existing = records.find(r => r.date === dateStr);
         chartData.push({
           value: existing ? existing.total : 0,
-          label: d.toLocaleDateString('en-US', { weekday: 'narrow' }) // e.g. 'M', 'T', 'W' makes it fit perfectly
+          label: d.toLocaleDateString('en-US', { weekday: 'narrow' })
         });
       }
       
@@ -42,14 +55,13 @@ export default function MetricsChart({ title, type, color, unit, refreshKey }) {
   };
 
   const calculateMax = () => {
-     if (type === 'mood') return 5.5; // Strictly bound mood scale 1-5, padding slightly so points aren't cut
+     if (type === 'mood') return 5.5;
      const genericMax = Math.max(...data.map(d => d.value), 10);
      return genericMax * 1.2;
   };
   const maxValue = calculateMax();
 
-  // Round decimals specifically for UI tooltip cleanly
-  const parseVal = (v) => type === 'mood' ? parseFloat(v).toFixed(1) : v;
+  const parseVal = (v: number) => type === 'mood' ? parseFloat(String(v)).toFixed(1) : v;
 
   return (
     <View style={s.card}>
@@ -96,7 +108,7 @@ export default function MetricsChart({ title, type, color, unit, refreshKey }) {
               activatePointersOnLongPress: false,
               activatePointersDelay: 0,
               autoAdjustPointerLabelPosition: true,
-              pointerLabelComponent: items => {
+              pointerLabelComponent: (items: Array<{ value: number }>) => {
                 return (
                   <View style={[s.tooltip, { backgroundColor: colors.surface, borderColor: color }]}>
                     <Text style={[s.tooltipText, { color: colors.text }]}>{parseVal(items[0].value)} {unit}</Text>
@@ -111,7 +123,7 @@ export default function MetricsChart({ title, type, color, unit, refreshKey }) {
   );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   card: {
     backgroundColor: colors.surfaceInput,
     borderRadius: 24,

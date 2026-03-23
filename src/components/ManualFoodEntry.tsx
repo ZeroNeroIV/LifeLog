@@ -1,19 +1,18 @@
-// src/components/ManualFoodEntry.jsx - Manual Food Search & Entry
-import React, { useState, useEffect } from 'react';
+// src/components/ManualFoodEntry.tsx - Manual Food Search & Entry
+import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, ActivityIndicator, Modal, Dimensions } from 'react-native';
 import { Search, X, Check, AlertTriangle, Edit3 } from 'lucide-react-native';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import Animated, { useSharedValue, useAnimatedStyle, withSpring, runOnJS } from 'react-native-reanimated';
-import { useTheme } from '../theme';
-import { searchDrinks } from '../services/nutritionApi';
-import { createMeal, addFoodToMeal } from '../db';
+import { useTheme, ThemeColors } from '../theme';
+import { searchDrinks, DrinkResult } from '../services/nutritionApi';
+import { createMeal, addFoodToMeal, MealType } from '../db';
 import * as Haptics from 'expo-haptics';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const MAX_TRANSLATE_Y = -SCREEN_HEIGHT * 0.8;
 
-// Debounce hook
-const useDebounce = (value, delay) => {
+const useDebounce = (value: string, delay: number) => {
   const [debouncedValue, setDebouncedValue] = useState(value);
   useEffect(() => {
     const handler = setTimeout(() => setDebouncedValue(value), delay);
@@ -22,40 +21,66 @@ const useDebounce = (value, delay) => {
   return debouncedValue;
 };
 
-export default function ManualFoodEntry({ visible, onClose, onFoodAdded, onReportFood }) {
+interface SearchResult {
+  id: string;
+  name: string;
+  brand: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
+interface ManualFoodEntryProps {
+  visible: boolean;
+  onClose: () => void;
+  onFoodAdded?: () => void;
+  onReportFood?: (name: string) => void;
+}
+
+export default function ManualFoodEntry({ visible, onClose, onFoodAdded, onReportFood }: ManualFoodEntryProps) {
   const { colors } = useTheme();
-  const s = getStyles(colors);
+  const s = useMemo(() => getStyles(colors), [colors]);
   
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState([]);
+  const [results, setResults] = useState<SearchResult[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedFood, setSelectedFood] = useState(null);
+  const [selectedFood, setSelectedFood] = useState<SearchResult | null>(null);
   const [quantity, setQuantity] = useState('100');
-  const [mealType, setMealType] = useState('meal');
+  const [mealType, setMealType] = useState<MealType>('meal');
   const [customMode, setCustomMode] = useState(false);
   const [customCalories, setCustomCalories] = useState('');
   const [customProtein, setCustomProtein] = useState('');
   const [customCarbs, setCustomCarbs] = useState('');
   const [customFat, setCustomFat] = useState('');
 
-  // Gesture handling for draggable bottom sheet
   const translateY = useSharedValue(0);
   const context = useSharedValue({ y: 0 });
+
+  const resetAndClose = () => {
+    setQuery('');
+    setResults([]);
+    setSelectedFood(null);
+    setQuantity('100');
+    setCustomMode(false);
+    setCustomCalories('');
+    setCustomProtein('');
+    setCustomCarbs('');
+    setCustomFat('');
+    onClose();
+  };
 
   const gesture = Gesture.Pan()
     .onStart(() => {
       context.value = { y: translateY.value };
     })
     .onUpdate((event) => {
-      // Only allow downward dragging (closing gesture)
       translateY.value = Math.max(context.value.y + event.translationY, MAX_TRANSLATE_Y);
     })
     .onEnd((event) => {
-      // If dragged down more than 150px or velocity is high, close
       if (event.translationY > 150 || event.velocityY > 500) {
         runOnJS(resetAndClose)();
       } else {
-        // Snap back to open position
         translateY.value = withSpring(0);
       }
     });
@@ -82,16 +107,14 @@ export default function ManualFoodEntry({ visible, onClose, onFoodAdded, onRepor
     }
   }, [debouncedQuery]);
 
-  const searchFoods = async (q) => {
+  const searchFoods = async (q: string) => {
     setLoading(true);
     try {
       const data = await searchDrinks(q);
-      // Map to our format with estimated macros
-      setResults(data.slice(0, 15).map(item => ({
+      setResults(data.slice(0, 15).map((item: DrinkResult) => ({
         id: item.id,
         name: item.name,
         brand: item.brand,
-        // Estimate calories from available data or use defaults
         calories: estimateCalories(item),
         protein: 0,
         carbs: item.sugar?.value || 0,
@@ -104,13 +127,12 @@ export default function ManualFoodEntry({ visible, onClose, onFoodAdded, onRepor
     setLoading(false);
   };
 
-  const estimateCalories = (item) => {
-    // Rough estimate: sugar contributes ~4 cal/g
+  const estimateCalories = (item: DrinkResult) => {
     if (item.sugar?.value) return Math.round(item.sugar.value * 4);
-    return 50; // Default estimate per 100g
+    return 50;
   };
 
-  const handleSelectFood = (food) => {
+  const handleSelectFood = (food: SearchResult) => {
     setSelectedFood(food);
     setQuantity('100');
   };
@@ -135,7 +157,7 @@ export default function ManualFoodEntry({ visible, onClose, onFoodAdded, onRepor
         quantityG: qty,
         source: 'custom',
       });
-    } else {
+    } else if (selectedFood) {
       await addFoodToMeal(mealId, {
         name: selectedFood.name,
         fdcId: selectedFood.id,
@@ -153,19 +175,6 @@ export default function ManualFoodEntry({ visible, onClose, onFoodAdded, onRepor
     resetAndClose();
   };
 
-  const resetAndClose = () => {
-    setQuery('');
-    setResults([]);
-    setSelectedFood(null);
-    setQuantity('100');
-    setCustomMode(false);
-    setCustomCalories('');
-    setCustomProtein('');
-    setCustomCarbs('');
-    setCustomFat('');
-    onClose();
-  };
-
   const handleCustomEntry = () => {
     setCustomMode(true);
     setSelectedFood(null);
@@ -176,7 +185,7 @@ export default function ManualFoodEntry({ visible, onClose, onFoodAdded, onRepor
     resetAndClose();
   };
 
-  const renderFoodItem = ({ item }) => (
+  const renderFoodItem = ({ item }: { item: SearchResult }) => (
     <TouchableOpacity 
       style={[s.foodItem, selectedFood?.id === item.id && s.foodItemSelected]} 
       onPress={() => handleSelectFood(item)}
@@ -194,7 +203,6 @@ export default function ManualFoodEntry({ visible, onClose, onFoodAdded, onRepor
       <View style={s.overlay}>
         <GestureDetector gesture={gesture}>
           <Animated.View style={[s.modal, rBottomSheetStyle]}>
-            {/* Drag handle */}
             <View style={s.dragHandle}>
               <View style={s.dragIndicator} />
             </View>
@@ -287,7 +295,7 @@ export default function ManualFoodEntry({ visible, onClose, onFoodAdded, onRepor
                 </TouchableOpacity>
               </View>
             </View>
-          ) : (
+          ) : selectedFood && (
             <View style={s.detailView}>
               <Text style={s.selectedName}>{selectedFood.name}</Text>
               
@@ -341,7 +349,7 @@ export default function ManualFoodEntry({ visible, onClose, onFoodAdded, onRepor
   );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modal: { backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '80%', minHeight: 400 },
   dragHandle: { alignItems: 'center', paddingVertical: 12 },
@@ -367,7 +375,7 @@ const getStyles = (colors) => StyleSheet.create({
   detailView: { padding: 16 },
   selectedName: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: 20 },
   inputRow: { marginBottom: 16 },
-  inputLabel: { fontSize: 12, fontWeight: '600', color: colors.textDim, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 },
+  inputLabel: { fontSize: 12, fontWeight: '600', color: colors.textDim, marginBottom: 8, textTransform: 'uppercase' as const, letterSpacing: 1 },
   quantityInput: { backgroundColor: colors.surfaceInput, borderRadius: 12, padding: 14, fontSize: 18, fontWeight: '600', color: colors.text, textAlign: 'center' },
   macroInputs: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 16 },
   macroInput: { width: '47%' },

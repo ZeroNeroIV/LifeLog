@@ -1,15 +1,25 @@
-// src/components/NutritionChart.jsx - Weekly Calorie Chart
-import React, { useEffect, useState } from 'react';
+// src/components/NutritionChart.tsx - Weekly Calorie Chart
+import React, { useEffect, useState, useMemo } from 'react';
 import { View, StyleSheet, Text, ActivityIndicator } from 'react-native';
 import { BarChart } from 'react-native-gifted-charts';
 import { getWeeklyNutritionData, getAllSettings } from '../db';
-import { useTheme } from '../theme';
+import { useTheme, ThemeColors } from '../theme';
 
-export default function NutritionChart({ refreshKey }) {
+interface ChartDataPoint {
+  value: number;
+  label: string;
+  frontColor: string;
+}
+
+interface NutritionChartProps {
+  refreshKey?: number;
+}
+
+export default function NutritionChart({ refreshKey }: NutritionChartProps) {
   const { colors } = useTheme();
-  const s = getStyles(colors);
+  const s = useMemo(() => getStyles(colors), [colors]);
   
-  const [data, setData] = useState([]);
+  const [data, setData] = useState<ChartDataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [goal, setGoal] = useState(2000);
 
@@ -21,7 +31,7 @@ export default function NutritionChart({ refreshKey }) {
       const [records, settings] = await Promise.all([getWeeklyNutritionData(), getAllSettings()]);
       setGoal(parseInt(settings.nutrition_calorie_goal) || 2000);
       
-      const chartData = [];
+      const chartData: ChartDataPoint[] = [];
       for (let i = 6; i >= 0; i--) {
         const d = new Date();
         d.setDate(d.getDate() - i);
@@ -105,14 +115,14 @@ export default function NutritionChart({ refreshKey }) {
   );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   card: { backgroundColor: colors.surfaceInput, borderRadius: 24, padding: 24, marginBottom: 16, borderWidth: 1, borderColor: colors.surfaceBorder, alignItems: 'center' },
   title: { alignSelf: 'flex-start', fontSize: 16, fontWeight: '800', color: colors.text, letterSpacing: -0.5, marginBottom: 16 },
   loader: { height: 140, justifyContent: 'center', alignItems: 'center' },
   statsRow: { flexDirection: 'row', gap: 32, marginBottom: 16 },
   stat: { alignItems: 'center' },
   statValue: { fontSize: 24, fontWeight: '800', color: colors.primary },
-  statLabel: { fontSize: 11, fontWeight: '600', color: colors.textDim, textTransform: 'uppercase', letterSpacing: 1 },
+  statLabel: { fontSize: 11, fontWeight: '600', color: colors.textDim, textTransform: 'uppercase' as const, letterSpacing: 1 },
   chartWrapper: { marginLeft: -10 },
   xLabel: { color: colors.textDim, fontSize: 11, fontWeight: '800' },
   legend: { flexDirection: 'row', gap: 20, marginTop: 12 },

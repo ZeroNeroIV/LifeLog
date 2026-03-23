@@ -1,15 +1,15 @@
-// src/components/NutritionChat.jsx - AI Chat Interface for Food Logging
-import React, { useState, useRef, useEffect } from 'react';
+// src/components/NutritionChat.tsx - AI Chat Interface for Food Logging
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, FlatList, KeyboardAvoidingView, Platform, ActivityIndicator, Animated, Alert } from 'react-native';
 import { Send, Check, X, Bot, AlertCircle, Mic, MicOff, RefreshCcw } from 'lucide-react-native';
-import { useTheme } from '../theme';
-import { initializeLLM, isLLMReady, processMessage, logFoodsFromResponse, getCurrentConversationId } from '../services/llm/NutritionLLMService';
-import { getConversationMessages } from '../db';
+import { useTheme, ThemeColors } from '../theme';
+import { initializeLLM, isLLMReady, processMessage, logFoodsFromResponse, getCurrentConversationId, ChatResponse } from '../services/llm/NutritionLLMService';
+import { getConversationMessages, ConversationMessage } from '../db';
 
 // Guard: expo-speech-recognition requires a dev build, not available in Expo Go
-let SpeechModule = null;
-let useSpeechRecognitionEventSafe = () => {};
-let ExpoSpeechRecognitionModuleSafe = null;
+let SpeechModule: any = null;
+let useSpeechRecognitionEventSafe = (_event: string, _cb: (...args: any[]) => void) => {};
+let ExpoSpeechRecognitionModuleSafe: any = null;
 try {
   SpeechModule = require('expo-speech-recognition');
   useSpeechRecognitionEventSafe = SpeechModule.useSpeechRecognitionEvent;
@@ -18,27 +18,37 @@ try {
   console.warn('[Speech] expo-speech-recognition not available');
 }
 
-const RESPONSE_TIMEOUT = 60000; // 60 second timeout for model response
+const RESPONSE_TIMEOUT = 60000;
 
-export default function NutritionChat({ modelReady, onFoodLogged }) {
+interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+}
+
+interface NutritionChatProps {
+  modelReady: boolean;
+  onFoodLogged?: () => void;
+}
+
+export default function NutritionChat({ modelReady, onFoodLogged }: NutritionChatProps) {
   const { colors } = useTheme();
-  const s = getStyles(colors);
-  const flatListRef = useRef(null);
+  const s = useMemo(() => getStyles(colors), [colors]);
+  const flatListRef = useRef<FlatList>(null);
   
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(false);
-  const [initError, setInitError] = useState(null);
-  const [pendingFoods, setPendingFoods] = useState(null);
+  const [initError, setInitError] = useState<string | null>(null);
+  const [pendingFoods, setPendingFoods] = useState<ChatResponse | null>(null);
   const [streamingText, setStreamingText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [modelError, setModelError] = useState(null);
-  const timeoutRef = useRef(null);
+  const [modelError, setModelError] = useState<string | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
-  // Voice input state
   const [isListening, setIsListening] = useState(false);
-  const [voiceError, setVoiceError] = useState(null);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
   const [partialResults, setPartialResults] = useState('');
   const [lastFinalTranscript, setLastFinalTranscript] = useState('');
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -48,7 +58,6 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
     if (modelReady) initChat();
   }, [modelReady]);
 
-  // Speech recognition event handlers
   useSpeechRecognitionEventSafe('start', () => {
     setIsListening(true);
     setVoiceError(null);
@@ -56,70 +65,55 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
   });
 
   useSpeechRecognitionEventSafe('end', () => {
-    // Save the last partial result as final text before clearing
-    setPartialResults(currentPartial => {
+    setPartialResults((currentPartial: string) => {
       if (currentPartial && currentPartial.trim()) {
-        setInput(prev => prev ? `${prev} ${currentPartial.trim()}` : currentPartial.trim());
+        setInput((prev: string) => prev ? `${prev} ${currentPartial.trim()}` : currentPartial.trim());
       }
       return '';
     });
     setIsListening(false);
   });
 
-  useSpeechRecognitionEventSafe('result', (event) => {
-    console.log('[STT Result Event]', JSON.stringify(event, null, 2));
-    
-    // Handle different possible structures from expo-speech-recognition
+  useSpeechRecognitionEventSafe('result', (event: any) => {
     let transcript = '';
     let isFinal = false;
     
-    // Try array-based results (most common)
     if (Array.isArray(event.results) && event.results.length > 0) {
       const lastResult = event.results[event.results.length - 1];
       transcript = lastResult.transcript || lastResult.transcription || lastResult.text || '';
       isFinal = lastResult.isFinal !== undefined ? lastResult.isFinal : (lastResult.final !== undefined ? lastResult.final : false);
     } 
-    // Try object-based results
     else if (event.results && typeof event.results === 'object') {
       transcript = event.results.transcript || event.results.transcription || event.results.text || '';
       isFinal = event.results.isFinal !== undefined ? event.results.isFinal : false;
     }
-    // Try direct transcript on event
     else if (event.transcript) {
       transcript = event.transcript;
       isFinal = event.isFinal || false;
     }
     
-    console.log('[STT] Extracted:', { transcript, isFinal, length: transcript.length });
-    
     if (transcript && transcript.trim()) {
       if (isFinal) {
-        console.log('[STT] Adding final transcript to input:', transcript);
-        setInput(prev => {
-          const newValue = prev ? `${prev} ${transcript.trim()}` : transcript.trim();
-          console.log('[STT] New input value:', newValue);
-          return newValue;
+        setInput((prev: string) => {
+          return prev ? `${prev} ${transcript.trim()}` : transcript.trim();
         });
         setPartialResults('');
       } else {
-        console.log('[STT] Showing partial results:', transcript);
         setPartialResults(transcript);
       }
     }
   });
 
-  useSpeechRecognitionEventSafe('error', (event) => {
+  useSpeechRecognitionEventSafe('error', (event: any) => {
     console.error('Voice error:', event);
     setIsListening(false);
     setPartialResults('');
-    // Don't show error for user cancellation or no speech detected
     if (event.error !== 'aborted' && event.error !== 'no-speech') {
       setVoiceError(event.message || 'Voice recognition failed');
       setTimeout(() => setVoiceError(null), 3000);
     }
   });
 
-  // Pulse animation for recording indicator
   useEffect(() => {
     if (isListening) {
       const pulse = Animated.loop(
@@ -135,7 +129,6 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
     }
   }, [isListening, pulseAnim]);
 
-  // Typing indicator animation
   useEffect(() => {
     if (isTyping) {
       const typing = Animated.loop(
@@ -162,7 +155,6 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
       setPartialResults('');
       setLastFinalTranscript('');
       
-      // Check/request permissions
       const result = await ExpoSpeechRecognitionModuleSafe.requestPermissionsAsync();
       if (!result.granted) {
         setVoiceError('Microphone permission denied');
@@ -170,7 +162,6 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
         return;
       }
 
-      // Start recognition
       ExpoSpeechRecognitionModuleSafe.start({
         lang: 'en-US',
         interimResults: true,
@@ -206,15 +197,14 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
     setInitError(null);
     try {
       await initializeLLM();
-      // Load existing messages if any
       const convId = getCurrentConversationId();
       if (convId) {
         const existing = await getConversationMessages(convId);
-        setMessages(existing.map(m => ({ id: m.id, role: m.role, content: m.content })));
+        setMessages(existing.map((m: ConversationMessage) => ({ id: m.id.toString(), role: m.role, content: m.content })));
       }
     } catch (e) {
       console.error('LLM init error:', e);
-      setInitError(e.message);
+      setInitError((e as Error).message);
     }
     setIsInitializing(false);
   };
@@ -222,7 +212,7 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
   const sendMessage = async () => {
     if (!input.trim() || isLoading) return;
     
-    const userMsg = { id: Date.now().toString(), role: 'user', content: input.trim() };
+    const userMsg: ChatMessage = { id: Date.now().toString(), role: 'user', content: input.trim() };
     setMessages(prev => [...prev, userMsg]);
     setInput('');
     setIsLoading(true);
@@ -230,7 +220,6 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
     setStreamingText('');
     setModelError(null);
 
-    // Set timeout for model response
     timeoutRef.current = setTimeout(() => {
       if (isLoading) {
         setModelError('Model is taking too long to respond. Try again with a simpler message.');
@@ -241,16 +230,14 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
     }, RESPONSE_TIMEOUT);
 
     try {
-      let hasReceivedToken = false;
       const response = await processMessage(userMsg.content, (token) => {
-        hasReceivedToken = true;
         setIsTyping(false);
         setStreamingText(prev => prev + token);
       });
 
-      clearTimeout(timeoutRef.current);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
-      const assistantMsg = { id: (Date.now() + 1).toString(), role: 'assistant', content: response.text };
+      const assistantMsg: ChatMessage = { id: (Date.now() + 1).toString(), role: 'assistant', content: response.text };
       setMessages(prev => [...prev, assistantMsg]);
       setStreamingText('');
       setIsTyping(false);
@@ -259,28 +246,25 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
         setPendingFoods(response);
       }
     } catch (e) {
-      clearTimeout(timeoutRef.current);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
       console.error('[Chat] Error:', e);
       
-      // Show error message in chat
-      const errorMsg = { 
+      const errorMsg: ChatMessage = { 
         id: 'err-' + Date.now(), 
         role: 'system', 
-        content: `Failed to get response: ${e.message || 'Unknown error'}. Please try again.`
+        content: `Failed to get response: ${(e as Error).message || 'Unknown error'}. Please try again.`
       };
       setMessages(prev => [...prev, errorMsg]);
       setIsTyping(false);
-      setModelError(e.message || 'Model failed to respond');
+      setModelError((e as Error).message || 'Model failed to respond');
     }
     setIsLoading(false);
   };
 
   const retryLastMessage = () => {
-    // Find the last user message and resend it
     const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
     if (lastUserMsg) {
       setInput(lastUserMsg.content);
-      // Remove the last error message
       setMessages(prev => prev.filter(m => !m.id.startsWith('err-')));
       setModelError(null);
     }
@@ -291,14 +275,14 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
     try {
       await logFoodsFromResponse(pendingFoods);
       setMessages(prev => [...prev, { id: 'logged-' + Date.now(), role: 'system', content: '✓ Foods logged successfully!' }]);
-      if (onFoodLogged) onFoodLogged(); // Refresh parent data
+      if (onFoodLogged) onFoodLogged();
     } catch (e) {
-      setMessages(prev => [...prev, { id: 'err-' + Date.now(), role: 'system', content: `Failed to log: ${e.message}` }]);
+      setMessages(prev => [...prev, { id: 'err-' + Date.now(), role: 'system', content: `Failed to log: ${(e as Error).message}` }]);
     }
     setPendingFoods(null);
   };
 
-  const renderMessage = ({ item }) => {
+  const renderMessage = ({ item }: { item: ChatMessage }) => {
     const isUser = item.role === 'user';
     const isSystem = item.role === 'system';
     const isError = item.id.startsWith('err-');
@@ -394,8 +378,8 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
       {pendingFoods && (
         <View style={s.confirmBar}>
           <View style={s.confirmContent}>
-            <Text style={s.confirmTitle}>Found {pendingFoods.foods.length} food item(s):</Text>
-            {pendingFoods.foods.map((food, idx) => (
+            <Text style={s.confirmTitle}>Found {pendingFoods.foods?.length} food item(s):</Text>
+            {pendingFoods.foods?.map((food, idx) => (
               <Text key={idx} style={s.confirmFoodItem}>
                 • {food.name}: {food.calories} cal (P:{food.protein_g}g C:{food.carbs_g}g F:{food.fat_g}g)
               </Text>
@@ -415,14 +399,12 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
         </View>
       )}
 
-      {/* Voice error message */}
       {voiceError && (
         <View style={s.voiceErrorBar}>
           <Text style={s.voiceErrorText}>{voiceError}</Text>
         </View>
       )}
 
-      {/* Partial results while speaking */}
       {isListening && partialResults ? (
         <View style={s.partialBar}>
           <Text style={s.partialText}>{partialResults}</Text>
@@ -442,7 +424,6 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
           editable={!isListening}
         />
         
-        {/* Microphone button */}
         <Animated.View style={{ transform: [{ scale: isListening ? pulseAnim : 1 }] }}>
           <TouchableOpacity 
             style={[s.micBtn, isListening && s.micBtnActive, !ExpoSpeechRecognitionModuleSafe && s.micBtnDisabled]} 
@@ -457,7 +438,6 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
           </TouchableOpacity>
         </Animated.View>
 
-        {/* Send button */}
         <TouchableOpacity 
           style={[s.sendBtn, (!input.trim() || isLoading || isListening) && s.sendBtnDisabled]} 
           onPress={sendMessage} 
@@ -474,7 +454,7 @@ export default function NutritionChat({ modelReady, onFoodLogged }) {
   );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { flex: 1 },
   placeholder: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },
   placeholderTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginTop: 8 },
@@ -511,7 +491,6 @@ const getStyles = (colors) => StyleSheet.create({
   input: { flex: 1, backgroundColor: colors.surfaceInput, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: colors.text, maxHeight: 100 },
   sendBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.primary, alignItems: 'center', justifyContent: 'center' },
   sendBtnDisabled: { opacity: 0.5 },
-  // Voice input styles
   micBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.surfaceInput, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.surfaceBorder },
   micBtnActive: { backgroundColor: '#ef4444', borderColor: '#ef4444' },
   micBtnDisabled: { opacity: 0.4 },
@@ -519,7 +498,6 @@ const getStyles = (colors) => StyleSheet.create({
   voiceErrorText: { fontSize: 13, color: colors.danger, textAlign: 'center' },
   partialBar: { backgroundColor: colors.primaryBg, paddingHorizontal: 16, paddingVertical: 8, borderTopWidth: 1, borderTopColor: colors.primary + '40' },
   partialText: { fontSize: 13, color: colors.textMuted, fontStyle: 'italic' },
-  // Typing indicator styles
   typingContainer: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16 },
   typingDots: { flexDirection: 'row', gap: 6, alignItems: 'center' },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.text },

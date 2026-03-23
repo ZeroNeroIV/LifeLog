@@ -16,10 +16,10 @@ const CHANNELS = {
   MOOD_CHECK: 'mood-check',
   TIMER: 'timer',
   GENERAL: 'default',
-};
+} as const;
 
 // Initialize notification channels (required for Android)
-export const initNotifications = async () => {
+export const initNotifications = async (): Promise<boolean> => {
   try {
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
@@ -36,7 +36,6 @@ export const initNotifications = async () => {
 
     // Set up Android notification channels
     if (Platform.OS === 'android') {
-      // Channel for mood reminders
       await Notifications.setNotificationChannelAsync(CHANNELS.MOOD_CHECK, {
         name: 'Mood Reminders',
         importance: Notifications.AndroidImportance.MAX,
@@ -44,7 +43,6 @@ export const initNotifications = async () => {
         lightColor: '#ddb7ff',
       });
 
-      // Channel for timer notifications
       await Notifications.setNotificationChannelAsync(CHANNELS.TIMER, {
         name: 'Pomodoro Timer',
         importance: Notifications.AndroidImportance.LOW,
@@ -76,7 +74,7 @@ export const initNotifications = async () => {
 };
 
 // Schedule mood unlock notification
-export const scheduleNextMoodUnlockNotification = async () => {
+export const scheduleNextMoodUnlockNotification = async (): Promise<boolean> => {
   try {
     await Notifications.cancelScheduledNotificationAsync('mood-unlock');
     
@@ -86,10 +84,10 @@ export const scheduleNextMoodUnlockNotification = async () => {
         title: 'Tracker Unlocked 🌸',
         body: 'Your 1-hour cooldown has elapsed! Tap here to update your mood.',
         sound: true,
-        channelId: Platform.OS === 'android' ? CHANNELS.MOOD_CHECK : undefined,
       },
       trigger: {
         type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        channelId: Platform.OS === 'android' ? CHANNELS.MOOD_CHECK : undefined,
         seconds: 3600,
         repeats: false,
       },
@@ -104,14 +102,13 @@ export const scheduleNextMoodUnlockNotification = async () => {
 };
 
 // Force test mood notification
-export const forceTestMoodCheck = async () => {
+export const forceTestMoodCheck = async (): Promise<boolean> => {
   try {
     await Notifications.scheduleNotificationAsync({
       content: {
         title: 'Vibe Check Incoming! ✨',
         body: 'This is what your hourly notification looks like.',
         sound: true,
-        channelId: Platform.OS === 'android' ? CHANNELS.MOOD_CHECK : undefined,
       },
       trigger: null,
     });
@@ -125,7 +122,11 @@ export const forceTestMoodCheck = async () => {
 };
 
 // Update pomodoro timer notification
-export const updatePomodoroNotification = async (timeLeft, mode, activeName) => {
+export const updatePomodoroNotification = async (
+  timeLeft: number,
+  mode: string,
+  activeName: string,
+): Promise<boolean> => {
   const minutes = Math.floor(timeLeft / 60);
   const seconds = timeLeft % 60;
   const timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
@@ -144,25 +145,24 @@ export const updatePomodoroNotification = async (timeLeft, mode, activeName) => 
         autoDismiss: false,
         sound: false,
         categoryIdentifier: 'pomodoro-actions',
-        channelId: Platform.OS === 'android' ? CHANNELS.TIMER : undefined,
         priority: Platform.OS === 'android' ? Notifications.AndroidNotificationPriority.LOW : undefined,
       },
       trigger: null,
     });
     return true;
   } catch (err) {
-    console.log('[Notifications] Update error:', err.message);
+    console.log('[Notifications] Update error:', (err as Error).message);
     return false;
   }
 };
 
 // Clear pomodoro timer notification
-export const clearPomodoroNotification = async () => {
+export const clearPomodoroNotification = async (): Promise<boolean> => {
   try {
     await Notifications.cancelScheduledNotificationAsync('pomodoro-timer');
     return true;
   } catch (err) {
-    console.log('[Notifications] Clear error:', err.message);
+    console.log('[Notifications] Clear error:', (err as Error).message);
     return false;
   }
 };

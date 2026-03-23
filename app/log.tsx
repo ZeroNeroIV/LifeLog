@@ -3,7 +3,7 @@ import { useFocusEffect } from 'expo-router';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MessageSquare, Plus } from 'lucide-react-native';
-import { useTheme } from '../src/theme';
+import { useTheme, ThemeColors } from '../src/theme';
 import ScreenLayout from '../src/components/ScreenLayout';
 import ModelDownloadCard from '../src/components/ModelDownloadCard';
 import NutritionChat from '../src/components/NutritionChat';
@@ -11,9 +11,17 @@ import MealHistoryCard from '../src/components/MealHistoryCard';
 import ManualFoodEntry from '../src/components/ManualFoodEntry';
 import QuickFoodButtons from '../src/components/QuickFoodButtons';
 import FoodReportModal from '../src/components/FoodReportModal';
-import { getTodayNutritionTotals, getAllSettings } from '../src/db';
+import { getTodayNutritionTotals, getAllSettings, NutritionTotals } from '../src/db';
 
-function MacroBar({ label, value, goal, color, styles }) {
+interface MacroBarProps {
+  label: string;
+  value: number;
+  goal: number;
+  color: string;
+  styles: ReturnType<typeof getStyles>;
+}
+
+function MacroBar({ label, value, goal, color, styles }: MacroBarProps) {
   const pct = Math.min((value / goal) * 100, 100);
   return (
     <View style={styles.macroItem}>
@@ -36,7 +44,7 @@ export default function NutritionScreen() {
   const [showChat, setShowChat] = useState(false);
   const [showFoodReport, setShowFoodReport] = useState(false);
   const [reportFoodName, setReportFoodName] = useState('');
-  const [todayTotals, setTodayTotals] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 });
+  const [todayTotals, setTodayTotals] = useState<NutritionTotals>({ calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 });
   const [goals, setGoals] = useState({ calories: 2000, protein: 50, carbs: 250, fat: 65, fiber: 30 });
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -96,7 +104,6 @@ export default function NutritionScreen() {
         initialName={reportFoodName}
       />
 
-      {/* Full screen AI Chat Modal */}
       <Modal visible={showChat} animationType="slide" onRequestClose={() => setShowChat(false)}>
         <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
           <View style={s.chatHeader}>
@@ -113,7 +120,7 @@ export default function NutritionScreen() {
   );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   summaryCard: { backgroundColor: colors.surface, margin: 12, marginBottom: 0, padding: 16, borderRadius: 16, borderWidth: 1, borderColor: colors.surfaceBorder },
   calorieRow: { flexDirection: 'row', alignItems: 'baseline', marginBottom: 12 },
   calorieValue: { fontSize: 36, fontWeight: '800', color: colors.primary },

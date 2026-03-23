@@ -3,9 +3,9 @@ import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, KeyboardAvo
 import { Coffee, Plus, Search, X, ChevronLeft } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import BentoCard from './BentoCard';
-import { searchDrinks } from '../services/nutritionApi';
+import { searchDrinks, DrinkResult } from '../services/nutritionApi';
 import { addLog } from '../db';
-import { useTheme } from '../theme';
+import { useTheme, ThemeColors } from '../theme';
 
 const COMMON_DRINKS = ['Espresso', 'Filter Coffee', 'Green Tea', 'Orange Juice', 'Cola Soda', 'Energy Drink'];
 
@@ -15,12 +15,11 @@ export default function DrinksBentoCard() {
 
   const [modalVisible, setModalVisible] = useState(false);
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState([]);
+  const [results, setResults] = useState<DrinkResult[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedDrink, setSelectedDrink] = useState(null);
+  const [selectedDrink, setSelectedDrink] = useState<DrinkResult | null>(null);
   const [volume, setVolume] = useState('250'); 
 
-  // Debounced API Search
   useEffect(() => {
     if (query.length < 2) {
       setResults([]);
@@ -41,7 +40,7 @@ export default function DrinksBentoCard() {
     return () => clearTimeout(delay);
   }, [query]);
 
-  const handleSelectDrink = (drink) => {
+  const handleSelectDrink = (drink: DrinkResult) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedDrink(drink);
   };
@@ -142,7 +141,7 @@ export default function DrinksBentoCard() {
                   showsVerticalScrollIndicator={false}
                   contentContainerStyle={{ paddingBottom: 24 }}
                   keyboardShouldPersistTaps="handled" 
-                  renderItem={({item}) => (
+                  renderItem={({item}: { item: DrinkResult }) => (
                     <TouchableOpacity style={s.resultItem} onPress={() => handleSelectDrink(item)}>
                       <Text style={s.resName}>{item.name}</Text>
                       {item.brand ? <Text style={s.resBrand}>{item.brand}</Text> : null}
@@ -177,10 +176,10 @@ export default function DrinksBentoCard() {
 
                  <View style={s.previewCard}>
                     <Text style={s.previewTitle}>Estimated Intake</Text>
-                    {selectedDrink.caffeine && <Text style={s.pText}>⚡ Caffeine: {Math.round(selectedDrink.caffeine.value * (volume/100))}mg</Text>}
-                    {selectedDrink.vitaminC && <Text style={s.pText}>🍊 Vitamin C: {Math.round(selectedDrink.vitaminC.value * (volume/100))}mg</Text>}
-                    {selectedDrink.sugar && <Text style={s.pText}>🍬 Sugar: {Math.round(selectedDrink.sugar.value * (volume/100))}g</Text>}
-                    <Text style={s.pText}>💧 Water: {selectedDrink.water ? Math.round(selectedDrink.water.value * (volume/100)) : Math.round(volume * 0.9)}mL</Text>
+                    {selectedDrink.caffeine && <Text style={s.pText}>⚡ Caffeine: {Math.round(selectedDrink.caffeine.value * (parseFloat(volume) / 100))}mg</Text>}
+                    {selectedDrink.vitaminC && <Text style={s.pText}>🍊 Vitamin C: {Math.round(selectedDrink.vitaminC.value * (parseFloat(volume) / 100))}mg</Text>}
+                    {selectedDrink.sugar && <Text style={s.pText}>🍬 Sugar: {Math.round(selectedDrink.sugar.value * (parseFloat(volume) / 100))}g</Text>}
+                    <Text style={s.pText}>💧 Water: {selectedDrink.water ? Math.round(selectedDrink.water.value * (parseFloat(volume) / 100)) : Math.round(parseFloat(volume) * 0.9)}mL</Text>
                  </View>
 
                  <TouchableOpacity style={[s.saveBtn, { backgroundColor: colors.accent1 }]} onPress={finalizeLog}>
@@ -196,7 +195,7 @@ export default function DrinksBentoCard() {
   );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { marginTop: 12 },
   helperText: { color: colors.textDim, fontSize: 13, fontWeight: '600', marginBottom: 12 },
   chipContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
@@ -216,7 +215,7 @@ const getStyles = (colors) => StyleSheet.create({
   
   resultItem: { borderBottomWidth: 1, borderBottomColor: colors.surfaceBorder, paddingVertical: 16 },
   resName: { color: colors.text, fontSize: 16, fontWeight: '700', marginBottom: 4 },
-  resBrand: { color: colors.textDim, fontSize: 12, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 },
+  resBrand: { color: colors.textDim, fontSize: 12, textTransform: 'uppercase' as const, letterSpacing: 1, marginBottom: 8 },
   nutrBadges: { flexDirection: 'row', gap: 8 },
   badgeText: { color: colors.textMuted, fontSize: 12, backgroundColor: colors.surfaceInput, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, overflow: 'hidden' },
   emptyState: { color: colors.textDim, textAlign: 'center', marginTop: 20, fontStyle: 'italic' },
@@ -228,7 +227,7 @@ const getStyles = (colors) => StyleSheet.create({
   volumeUnit: { color: colors.textDim, fontSize: 20, fontWeight: '800', marginLeft: 12 },
 
   previewCard: { backgroundColor: colors.surfaceInput, padding: 16, borderRadius: 16, marginBottom: 24 },
-  previewTitle: { color: colors.textDim, fontSize: 12, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 8 },
+  previewTitle: { color: colors.textDim, fontSize: 12, fontWeight: '800', textTransform: 'uppercase' as const, letterSpacing: 1, marginBottom: 8 },
   pText: { color: colors.text, fontSize: 14, fontWeight: '600', marginBottom: 4 },
 
   saveBtn: { padding: 18, borderRadius: 16, alignItems: 'center' },

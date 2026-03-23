@@ -1,8 +1,37 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { getSetting, updateSetting } from './db';
 
-export const THEMES = {
+export interface ThemeColors {
+  background: string;
+  surface: string;
+  surfaceBorder: string;
+  surfaceInput: string;
+  text: string;
+  textMuted: string;
+  textDim: string;
+  tabBar: string;
+  topBar: string;
+  statusBar: string;
+  primary: string;
+  primaryBg: string;
+  primaryText: string;
+  accent1: string;
+  accent1Bg: string;
+  accent1Border: string;
+  accent2: string;
+  accent2Bg: string;
+  accent2Text: string;
+  vitaminC: string;
+  vitaminCBg: string;
+  sugar: string;
+  sugarBg: string;
+  danger: string;
+  dangerBg: string;
+  dangerText: string;
+}
+
+export const THEMES: Record<string, ThemeColors> = {
   dark: {
     background: '#0e0e0e',
     surface: '#1f2020',
@@ -13,7 +42,7 @@ export const THEMES = {
     textDim: '#767575',
     tabBar: 'rgba(31, 32, 32, 0.95)',
     topBar: 'rgba(14,14,14,0.8)',
-    statusBar: '#0e0e0e',  // Dark background for status bar
+    statusBar: '#0e0e0e',
     primary: '#7de9ff',
     primaryBg: '#7de9ff20',
     primaryText: '#00363e',
@@ -40,8 +69,8 @@ export const THEMES = {
     textMuted: '#64748b',
     textDim: '#94a3b8',
     tabBar: 'rgba(255, 255, 255, 0.95)',
-    topBar: '#e2e8f0',  // Solid grey shade for light mode
-    statusBar: '#cbd5e1',  // Slightly darker grey for status bar background
+    topBar: '#e2e8f0',
+    statusBar: '#cbd5e1',
     primary: '#0284c7',
     primaryBg: '#e0f2fe',
     primaryText: '#082f49',
@@ -61,15 +90,25 @@ export const THEMES = {
   }
 };
 
-const ThemeContext = createContext();
+interface ThemeContextValue {
+  colors: ThemeColors;
+  isDark: boolean;
+  toggleTheme: () => Promise<void>;
+}
 
-export const ThemeProvider = ({ children }) => {
-  const [themeMode, setThemeMode] = useState('dark');
+const ThemeContext = createContext<ThemeContextValue | null>(null);
+
+interface ThemeProviderProps {
+  children: ReactNode;
+}
+
+export const ThemeProvider = ({ children }: ThemeProviderProps) => {
+  const [themeMode, setThemeMode] = useState<string>('dark');
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
     getSetting('app_theme', 'dark').then(t => {
-      setThemeMode(t);
+      setThemeMode(t ?? 'dark');
       setIsReady(true);
     });
   }, []);
@@ -111,4 +150,8 @@ const loadingStyles = StyleSheet.create({
   },
 });
 
-export const useTheme = () => useContext(ThemeContext);
+export const useTheme = (): ThemeContextValue => {
+  const ctx = useContext(ThemeContext);
+  if (!ctx) throw new Error('useTheme must be used within ThemeProvider');
+  return ctx;
+};

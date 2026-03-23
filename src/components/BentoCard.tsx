@@ -1,10 +1,20 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { useTheme } from '../theme';
+import React, { ReactNode, ComponentType, useMemo } from 'react';
+import { View, Text, StyleSheet, StyleProp, ViewStyle } from 'react-native';
+import { useTheme, ThemeColors } from '../theme';
+import { LucideIcon } from 'lucide-react-native';
 
-export default function BentoCard({ title, subtitle, icon: Icon, color, children, style }) {
+interface BentoCardProps {
+  title: string;
+  subtitle?: string;
+  icon?: LucideIcon;
+  color?: string;
+  children?: ReactNode;
+  style?: StyleProp<ViewStyle>;
+}
+
+export default function BentoCard({ title, subtitle, icon: Icon, color, children, style }: BentoCardProps) {
   const { colors } = useTheme();
-  const s = getStyles(colors);
+  const s = useMemo(() => getStyles(colors), [colors]);
   return (
     <View style={[s.card, style]}>
       <View style={s.header}>
@@ -19,7 +29,7 @@ export default function BentoCard({ title, subtitle, icon: Icon, color, children
   );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   card: {
     backgroundColor: colors.surfaceInput,
     borderRadius: 24,

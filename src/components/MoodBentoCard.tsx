@@ -2,12 +2,19 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Smile, Lock } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { addLog, getTodayLogs } from '../db';
+import { addLog, getTodayLogs, LogEntry } from '../db';
 import { scheduleNextMoodUnlockNotification } from '../notifications';
 import BentoCard from './BentoCard';
-import { useTheme } from '../theme';
+import { useTheme, ThemeColors } from '../theme';
 
-const MOODS = [
+interface MoodOption {
+  val: number;
+  emoji: string;
+  label: string;
+  color: string;
+}
+
+const MOODS: MoodOption[] = [
   { val: 1, emoji: '😫', label: 'Awful', color: '#ff716c' },
   { val: 2, emoji: '🙁', label: 'Bad', color: '#ffb86c' },
   { val: 3, emoji: '😐', label: 'Okay', color: '#e7e5e4' },
@@ -19,13 +26,15 @@ export default function MoodBentoCard() {
   const { colors } = useTheme();
   const s = useMemo(() => getStyles(colors), [colors]);
   
-  const [todaysLogs, setTodaysLogs] = useState([]);
-  const [selectedMood, setSelectedMood] = useState(null);
+  const [todaysLogs, setTodaysLogs] = useState<LogEntry[]>([]);
+  const [selectedMood, setSelectedMood] = useState<number | null>(null);
   const [now, setNow] = useState(Math.floor(Date.now() / 1000));
+
+  const latestMood = todaysLogs.length > 0 ? todaysLogs[0] : null;
 
   useEffect(() => {
     loadMoods();
-    let interval;
+    let interval: ReturnType<typeof setInterval> | undefined;
     if (latestMood && now - latestMood.timestamp < 3600) {
       interval = setInterval(() => {
         setNow(Math.floor(Date.now() / 1000));
@@ -39,7 +48,7 @@ export default function MoodBentoCard() {
     setTodaysLogs(logs);
   };
 
-  const handleSelectMood = (val) => {
+  const handleSelectMood = (val: number) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     setSelectedMood(val);
   };
@@ -50,14 +59,11 @@ export default function MoodBentoCard() {
     await addLog('mood', selectedMood);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     
-    // Natively schedule the specific unlock notification 1 hour from this exact moment!
     await scheduleNextMoodUnlockNotification();
 
     setSelectedMood(null);
     loadMoods();
   };
-
-  const latestMood = todaysLogs.length > 0 ? todaysLogs[0] : null;
 
   // Calculate strict chronological boundary
   let isLocked = false;
@@ -120,7 +126,7 @@ export default function MoodBentoCard() {
   );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { marginTop: 16 },
   emojiRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
   emojiBtn: { 
@@ -135,10 +141,10 @@ const getStyles = (colors) => StyleSheet.create({
     borderColor: 'transparent'
   },
   emojiIcon: { fontSize: 24 },
-  emojiLabel: { fontSize: 10, fontWeight: '800', marginTop: 4, textTransform: 'uppercase' },
+  emojiLabel: { fontSize: 10, fontWeight: '800', marginTop: 4, textTransform: 'uppercase' as const },
   submitBtn: { paddingVertical: 18, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   submitText: { fontSize: 16, fontWeight: '800', letterSpacing: 0.5 },
   lockedBox: { alignItems: 'center', justifyContent: 'center', paddingVertical: 24, paddingHorizontal: 16, backgroundColor: colors.surfaceInput, borderRadius: 16, borderWidth: 1, borderColor: colors.surfaceBorder, borderStyle: 'dashed' },
-  lockedTitle: { fontSize: 16, fontWeight: '800', color: colors.text, marginBottom: 8, letterSpacing: 1, textTransform: 'uppercase' },
+  lockedTitle: { fontSize: 16, fontWeight: '800', color: colors.text, marginBottom: 8, letterSpacing: 1, textTransform: 'uppercase' as const },
   lockedDesc: { fontSize: 13, color: colors.textDim, textAlign: 'center', lineHeight: 20, fontWeight: '600', paddingHorizontal: 12 }
 });

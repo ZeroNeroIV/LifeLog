@@ -1,12 +1,22 @@
-// src/components/QuickFoodButtons.jsx - Common Food Quick Add
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
-import { Coffee, Egg, Apple, Sandwich, Cookie, Salad } from 'lucide-react-native';
-import { useTheme } from '../theme';
+import { Coffee, Egg, Apple, Sandwich, Cookie, Salad, LucideIcon } from 'lucide-react-native';
+import { useTheme, ThemeColors } from '../theme';
 import { createMeal, addFoodToMeal } from '../db';
 import * as Haptics from 'expo-haptics';
 
-const QUICK_FOODS = [
+interface QuickFood {
+  id: string;
+  name: string;
+  icon: LucideIcon;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  color: string;
+}
+
+const QUICK_FOODS: QuickFood[] = [
   { id: 'coffee', name: 'Coffee', icon: Coffee, calories: 5, protein: 0, carbs: 0, fat: 0, color: '#8B4513' },
   { id: 'egg', name: 'Egg', icon: Egg, calories: 70, protein: 6, carbs: 0.5, fat: 5, color: '#F5DEB3' },
   { id: 'apple', name: 'Apple', icon: Apple, calories: 95, protein: 0.5, carbs: 25, fat: 0.3, color: '#DC143C' },
@@ -15,15 +25,19 @@ const QUICK_FOODS = [
   { id: 'salad', name: 'Salad', icon: Salad, calories: 120, protein: 3, carbs: 10, fat: 7, color: '#228B22' },
 ];
 
-export default function QuickFoodButtons({ onFoodAdded }) {
-  const { colors } = useTheme();
-  const s = getStyles(colors);
+interface QuickFoodButtonsProps {
+  onFoodAdded?: () => void;
+}
 
-  const handleQuickAdd = async (food) => {
+export default function QuickFoodButtons({ onFoodAdded }: QuickFoodButtonsProps) {
+  const { colors } = useTheme();
+  const s = useMemo(() => getStyles(colors), [colors]);
+
+  const handleQuickAdd = async (food: QuickFood) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     
     const mealType = ['cookie', 'apple'].includes(food.id) ? 'snack' : 'meal';
-    const mealId = await createMeal(mealType);
+    const mealId = await createMeal(mealType as 'meal' | 'snack');
     
     await addFoodToMeal(mealId, {
       name: food.name,
@@ -60,7 +74,7 @@ export default function QuickFoodButtons({ onFoodAdded }) {
   );
 }
 
-const getStyles = (colors) => StyleSheet.create({
+const getStyles = (colors: ThemeColors) => StyleSheet.create({
   container: { paddingVertical: 8 },
   title: { fontSize: 11, fontWeight: '700', color: colors.textDim, letterSpacing: 1, marginBottom: 8, paddingHorizontal: 12 },
   scroll: { paddingHorizontal: 8, gap: 8 },
