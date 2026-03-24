@@ -385,12 +385,28 @@ const _compactIfNeeded = async (): Promise<void> => {
   const messages = await getConversationMessages(_currentConversationId);
   if (messages.length < MAX_MESSAGES_BEFORE_COMPACT) return;
   
-  const toSummarize = messages.slice(0, -5).map(m => `${m.role}: ${m.content}`).join("\n");
-  const compactPromise = _llamaContext.completion({ prompt: `Summarize in 2 sentences:\n${toSummarize}\nSummary:`, n_predict: 100, temperature: 0.3 });
-  const compactTimeout = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error('Compaction timed out')), RESPONSE_TIMEOUT)
-  );
-  const result = await Promise.race([compactPromise, compactTimeout]);
-  await updateConversationSummary(_currentConversationId, result.text.trim());
-  await compactConversation(_currentConversationId, 5);
+  try {
+    const toSummarize = messages.slice(0, -5).map(m => `${m.role}: ${m.content}`).join("\n");
+    let summary = '';
+    const compactPromise = _llamaContext.completion(
+      { prompt: `Summarize in 2 sentences:\n${toSummarize}\nSummary:`, n_predict: 100, temperature: 0.3 },
+      (data) => {
+        const t = typeof data === 'string' ? data : (data?.token ?? '');
+        if (t) summary += t;
+      }
+    );
+    const compactTimeout = new Promise<{ text?: string }>((_, reject) =>
+      setTimeout(() => reject(new Error('Compaction timed out')), RESPONSE_TIMEOUT)
+    );
+    const result = await Promise.race([compactPromise, compactTimeout]);
+    const finalSummary = (result?.text || summary).trim();
+    if (finalSummary) {
+      await updateConversationSummary(_currentConversationId, finalSummary);
+    }
+    await compactConversation(_currentConversationId, 5);
+  } catch (e) {
+    console.warn('[LLM] Compaction failed:', (e as Error).message);
+    // Still compact messages even if summarization fails
+    await compactConversation(_currentConversationId, 5);
+  }
 };

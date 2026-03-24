@@ -247,16 +247,26 @@ export default function NutritionChat({ modelReady, onFoodLogged }: NutritionCha
       }
     } catch (e) {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
-      console.error('[Chat] Error:', e);
+      const err = e as Error;
+      console.error('[Chat] Error:', err);
+      
+      let errorMessage = 'Unknown error';
+      if (err?.message) {
+        errorMessage = err.message;
+      } else if (err?.name) {
+        errorMessage = `${err.name}: ${JSON.stringify(err)}`;
+      } else if (typeof err === 'string') {
+        errorMessage = err;
+      }
       
       const errorMsg: ChatMessage = { 
         id: 'err-' + Date.now(), 
         role: 'system', 
-        content: `Failed to get response: ${(e as Error).message || 'Unknown error'}. Please try again.`
+        content: `Failed to get response: ${errorMessage}. Please try again.`
       };
       setMessages(prev => [...prev, errorMsg]);
       setIsTyping(false);
-      setModelError((e as Error).message || 'Model failed to respond');
+      setModelError(errorMessage);
     }
     setIsLoading(false);
   };
