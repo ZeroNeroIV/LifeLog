@@ -13,10 +13,10 @@ import {
 
 const MAX_TOKENS = 256;
 const TEMPERATURE = 0.3;
-const CONTEXT_SIZE = 1024;
+const CONTEXT_SIZE = 2048;
 const RESPONSE_TIMEOUT = 120_000; // 120s for slower devices
-const MAX_MESSAGES_IN_CONTEXT = 6; // Last 3 exchanges (user+assistant)
-const COMPACT_AFTER_MESSAGES = 4; // Compact after 2 user messages
+const MAX_MESSAGES_IN_CONTEXT = 4; // Last 2 exchanges (user+assistant)
+const COMPACT_AFTER_MESSAGES = 2; // Compact after every user message
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -246,7 +246,19 @@ export const processMessage = async (
   onToken: ((token: string) => void) | null = null,
 ): Promise<ChatResponse> => {
   if (!_llamaContext) throw new Error("LLM not initialized");
-  if (!_currentConversationId) throw new Error("No conversation");
+  
+  // Ensure we have a valid conversation
+  if (!_currentConversationId) {
+    const existing = await getLatestConversation();
+    _currentConversationId = existing?.id ?? await createConversation();
+  } else {
+    // Verify conversation still exists before adding message
+    const conv = await getLatestConversation();
+    if (!conv || conv.id !== _currentConversationId) {
+      console.warn('[LLM] Conversation not found, creating new one');
+      _currentConversationId = await createConversation();
+    }
+  }
   
   await addMessage(_currentConversationId, "user", userMessage);
   const allMessages = await getConversationMessages(_currentConversationId);
