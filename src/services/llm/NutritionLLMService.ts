@@ -15,7 +15,8 @@ const MAX_TOKENS = 256;
 const TEMPERATURE = 0.3;
 const CONTEXT_SIZE = 1024;
 const RESPONSE_TIMEOUT = 120_000; // 120s for slower devices
-const MAX_MESSAGES_BEFORE_COMPACT = 20;
+const MAX_MESSAGES_IN_CONTEXT = 6; // Last 3 exchanges (user+assistant)
+const COMPACT_AFTER_MESSAGES = 4; // Compact after 2 user messages
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -248,16 +249,26 @@ export const processMessage = async (
   if (!_currentConversationId) throw new Error("No conversation");
   
   await addMessage(_currentConversationId, "user", userMessage);
-  const messages = await getConversationMessages(_currentConversationId);
+  const allMessages = await getConversationMessages(_currentConversationId);
   const conv = await getLatestConversation();
   
+  // Compact more aggressively - after every 2 user messages
+  const userMessageCount = allMessages.filter(m => m.role === 'user').length;
+  if (userMessageCount > 0 && userMessageCount % COMPACT_AFTER_MESSAGES === 0) {
+    await _compactIfNeeded();
+  }
+  
+  // Only use recent messages to avoid context overflow
+  const recentMessages = allMessages.slice(-MAX_MESSAGES_IN_CONTEXT);
+  
+  // Build compact prompt
   let context = SYSTEM_PROMPT + "\n\n";
-  if (conv?.summary) context += `Summary: ${conv.summary}\n\n`;
-  messages.forEach(m => context += `${m.role === "user" ? "User" : "Assistant"}: ${m.content}\n\n`);
+  if (conv?.summary) context += `[Summary]: ${conv.summary}\n\n`;
+  recentMessages.forEach(m => context += `${m.role === "user" ? "User" : "Asst"}: ${m.content}\n`);
   
   let fullResponse = "";
   const completionPromise = _llamaContext.completion(
-    { prompt: context + "Assistant:", n_predict: MAX_TOKENS, temperature: TEMPERATURE, stop: ["User:"] },
+    { prompt: context + "Asst:", n_predict: MAX_TOKENS, temperature: TEMPERATURE, stop: ["User:", "\nUser:"] },
     (data) => {
       const t = typeof data === 'string' ? data : (data?.token ?? '');
       if (t) {
@@ -273,7 +284,6 @@ export const processMessage = async (
   fullResponse = (result?.text || fullResponse).trim();
   
   await addMessage(_currentConversationId, "assistant", fullResponse);
-  if (messages.length >= MAX_MESSAGES_BEFORE_COMPACT) await _compactIfNeeded();
   
   const parsed = extractJSON(fullResponse);
   if (parsed?.type === "meal_log") {
@@ -383,30 +393,32 @@ export const releaseLLM = async (): Promise<void> => { if (_llamaContext) { awai
 const _compactIfNeeded = async (): Promise<void> => {
   if (!_llamaContext || !_currentConversationId) return;
   const messages = await getConversationMessages(_currentConversationId);
-  if (messages.length < MAX_MESSAGES_BEFORE_COMPACT) return;
+  if (messages.length < 4) return; // Need at least 4 messages to compact
   
   try {
-    const toSummarize = messages.slice(0, -5).map(m => `${m.role}: ${m.content}`).join("\n");
+    // Summarize older messages, keep last 2
+    const toSummarize = messages.slice(0, -2).map(m => `${m.role}: ${m.content}`).join("\n");
     let summary = '';
     const compactPromise = _llamaContext.completion(
-      { prompt: `Summarize in 2 sentences:\n${toSummarize}\nSummary:`, n_predict: 100, temperature: 0.3 },
+      { prompt: `Summarize this conversation briefly:\n${toSummarize}\nSummary:`, n_predict: 64, temperature: 0.3 },
       (data) => {
         const t = typeof data === 'string' ? data : (data?.token ?? '');
         if (t) summary += t;
       }
     );
     const compactTimeout = new Promise<{ text?: string }>((_, reject) =>
-      setTimeout(() => reject(new Error('Compaction timed out')), RESPONSE_TIMEOUT)
+      setTimeout(() => reject(new Error('Compaction timed out')), 30000)
     );
     const result = await Promise.race([compactPromise, compactTimeout]);
     const finalSummary = (result?.text || summary).trim();
     if (finalSummary) {
       await updateConversationSummary(_currentConversationId, finalSummary);
     }
-    await compactConversation(_currentConversationId, 5);
+    // Keep only last 2 messages after compacting
+    await compactConversation(_currentConversationId, 2);
   } catch (e) {
     console.warn('[LLM] Compaction failed:', (e as Error).message);
-    // Still compact messages even if summarization fails
-    await compactConversation(_currentConversationId, 5);
+    // Keep only last 2 messages even if summarization fails
+    await compactConversation(_currentConversationId, 2);
   }
 };
