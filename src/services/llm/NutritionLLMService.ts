@@ -392,10 +392,11 @@ export const releaseLLM = async (): Promise<void> => { if (_llamaContext) { awai
 
 const _compactIfNeeded = async (): Promise<void> => {
   if (!_llamaContext || !_currentConversationId) return;
-  const messages = await getConversationMessages(_currentConversationId);
-  if (messages.length < 4) return; // Need at least 4 messages to compact
   
   try {
+    const messages = await getConversationMessages(_currentConversationId);
+    if (messages.length < 4) return; // Need at least 4 messages to compact
+    
     // Summarize older messages, keep last 2
     const toSummarize = messages.slice(0, -2).map(m => `${m.role}: ${m.content}`).join("\n");
     let summary = '';
@@ -418,7 +419,11 @@ const _compactIfNeeded = async (): Promise<void> => {
     await compactConversation(_currentConversationId, 2);
   } catch (e) {
     console.warn('[LLM] Compaction failed:', (e as Error).message);
-    // Keep only last 2 messages even if summarization fails
-    await compactConversation(_currentConversationId, 2);
+    // Try to compact anyway, but catch any DB errors
+    try {
+      await compactConversation(_currentConversationId, 2);
+    } catch (dbError) {
+      console.error('[LLM] DB compaction also failed:', (dbError as Error).message);
+    }
   }
 };

@@ -615,17 +615,30 @@ export const updateConversationSummary = async (conversationId: number, summary:
 
 export const compactConversation = async (conversationId: number, keepCount: number = 10): Promise<void> => {
   const db = await getDB();
-  await db.runAsync(
-    `DELETE FROM ai_messages 
-     WHERE conversation_id = ? 
-       AND id NOT IN (
-         SELECT id FROM ai_messages 
-         WHERE conversation_id = ? 
-         ORDER BY timestamp DESC 
-         LIMIT ?
-       );`,
-    [conversationId, conversationId, keepCount],
+  
+  // First verify conversation exists
+  const conv = await db.getFirstAsync<{ id: number }>(
+    "SELECT id FROM ai_conversations WHERE id = ?;",
+    [conversationId],
   );
+  if (!conv) {
+    console.warn('[DB] Conversation not found for compaction:', conversationId);
+    return;
+  }
+  
+  await db.withTransactionAsync(async () => {
+    await db.runAsync(
+      `DELETE FROM ai_messages 
+       WHERE conversation_id = ? 
+         AND id NOT IN (
+           SELECT id FROM ai_messages 
+           WHERE conversation_id = ? 
+           ORDER BY timestamp DESC 
+           LIMIT ?
+         );`,
+      [conversationId, conversationId, keepCount],
+    );
+  });
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
