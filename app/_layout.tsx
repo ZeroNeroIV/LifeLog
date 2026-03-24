@@ -1,12 +1,13 @@
-import { useEffect, useState, Component, ReactNode } from 'react';
-import { Tabs } from 'expo-router';
+import { useEffect, useState, Component, ReactNode, useCallback } from 'react';
+import { Tabs, useFocusEffect } from 'expo-router';
 import { Home, UtensilsCrossed, Timer, Settings, Monitor } from 'lucide-react-native';
 import { StatusBar } from 'expo-status-bar';
 import { View, Text, StyleSheet } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { initializeDB } from '../src/db';
-import { initNotifications } from '../src/notifications';
+import { initializeDB, getTodayLogs, getSetting } from '../src/db';
+import { initNotifications, scheduleNextMoodUnlockNotification } from '../src/notifications';
 import { ThemeProvider, useTheme } from '../src/theme';
+import MoodCheckModal from '../src/components/MoodCheckModal';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
@@ -43,6 +44,50 @@ class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
 
 function MainTabs() {
   const { colors, isDark } = useTheme();
+  const [moodModalVisible, setMoodModalVisible] = useState(false);
+  const [now, setNow] = useState(Date.now());
+
+  // Check if mood check is due
+  useFocusEffect(
+    useCallback(() => {
+      const checkMoodDue = async () => {
+        try {
+          const enabled = await getSetting('mood_check_enabled');
+          if (enabled !== 'true') return;
+
+          const logs = await getTodayLogs('mood');
+          const latestMood = logs[0];
+          
+          if (!latestMood) {
+            // No mood logged today - show modal
+            setMoodModalVisible(true);
+            return;
+          }
+
+          const elapsed = Math.floor(Date.now() / 1000) - latestMood.timestamp;
+          if (elapsed >= 3600) {
+            // More than 1 hour since last mood - show modal
+            setMoodModalVisible(true);
+          }
+        } catch (e) {
+          console.error('Mood check error:', e);
+        }
+      };
+
+      checkMoodDue();
+
+      // Update time every minute to recheck
+      const interval = setInterval(() => {
+        setNow(Date.now());
+      }, 60000);
+
+      return () => clearInterval(interval);
+    }, [])
+  );
+
+  const handleMoodLogged = useCallback(async () => {
+    await scheduleNextMoodUnlockNotification();
+  }, []);
 
   return (
     <>
@@ -83,6 +128,12 @@ function MainTabs() {
         />
       </Tabs>
       <StatusBar style={isDark ? "light" : "dark"} />
+      
+      <MoodCheckModal
+        visible={moodModalVisible}
+        onClose={() => setMoodModalVisible(false)}
+        onMoodLogged={handleMoodLogged}
+      />
     </>
   );
 }

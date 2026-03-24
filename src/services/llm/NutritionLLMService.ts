@@ -4,7 +4,7 @@
 
 import { initLlama, LlamaContext } from "llama.rn";
 import { getModelInfo } from "./modelDownload";
-import { searchDrinks as searchFood } from "../nutritionApi";
+import { searchFoodNutrition, searchDrinks as searchFood } from "../nutritionApi";
 import {
   createMeal, addFoodToMeal, createConversation, addMessage,
   getConversationMessages, getLatestConversation, updateConversationSummary,
@@ -270,7 +270,7 @@ export const processMessage = async (
     setTimeout(() => reject(new Error(`LLM response timed out after ${RESPONSE_TIMEOUT / 1000}s`)), RESPONSE_TIMEOUT)
   );
   const result = await Promise.race([completionPromise, timeoutPromise]);
-  fullResponse = result.text.trim();
+  fullResponse = (result?.text || fullResponse).trim();
   
   await addMessage(_currentConversationId, "assistant", fullResponse);
   if (messages.length >= MAX_MESSAGES_BEFORE_COMPACT) await _compactIfNeeded();
@@ -290,7 +290,7 @@ export const processMessage = async (
       
       for (const food of parsed.foods) {
         try {
-          const searchResults = await searchFood(food.search_term || food.name);
+          const searchResults = await searchFoodNutrition(food.search_term || food.name);
           
           if (searchResults && searchResults.length > 0) {
             const nutritionData = searchResults[0];
@@ -317,11 +317,11 @@ export const processMessage = async (
             enrichedFoods.push({
               name: nutritionData.name,
               quantity_g: quantityG,
-              calories: Math.round((nutritionData.caffeine?.value || 0) * multiplier),
-              protein_g: 0,
-              carbs_g: Math.round((nutritionData.sugar?.value || 0) * multiplier * 10) / 10,
-              fat_g: 0,
-              fiber_g: 0,
+              calories: Math.round((nutritionData.calories?.value || 0) * multiplier),
+              protein_g: Math.round((nutritionData.protein?.value || 0) * multiplier * 10) / 10,
+              carbs_g: Math.round((nutritionData.carbs?.value || 0) * multiplier * 10) / 10,
+              fat_g: Math.round((nutritionData.fat?.value || 0) * multiplier * 10) / 10,
+              fiber_g: Math.round((nutritionData.fiber?.value || 0) * multiplier * 10) / 10,
               confidence: "high",
               source: nutritionData.id.startsWith('usda') ? 'usda' : 'ai',
             });

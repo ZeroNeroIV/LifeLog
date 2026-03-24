@@ -14,6 +14,10 @@ on:
         default: 'true'
         type: boolean
 
+env:
+  PRIMARY_MODEL_URL: https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_S.gguf
+  PRIMARY_MODEL_FILE: gemma-2-2b-q4-small.gguf
+
 jobs:
   build:
     if: github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.merged == true)
@@ -48,6 +52,14 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
+      - name: Cache LLM Model
+        uses: actions/cache@v4
+        with:
+          path: android/app/src/main/assets/models
+          key: ${{ runner.os }}-model-${{ env.PRIMARY_MODEL_FILE }}
+          restore-keys: |
+            ${{ runner.os }}-model-
+
       - name: Install dependencies
         run: bun install
 
@@ -64,15 +76,37 @@ jobs:
           sed -i '/org.gradle.java.installations.paths/d' android/gradle.properties
           echo "org.gradle.java.installations.auto-detect=true" >> android/gradle.properties
 
-      - name: Build Release APK
+      - name: Build Normal Release APK
         run: bash -c 'JAVA_HOME=/opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.10-7/x64 ./gradlew assembleRelease --no-daemon'
         working-directory: android
 
-      - name: Upload APK artifact
+      - name: Rename Normal APK
+        run: cp android/app/build/outputs/apk/release/app-release.apk lifelog-release.apk
+
+      - name: Download LLM Model
+        run: |
+          mkdir -p android/app/src/main/assets/models
+          curl -L -o android/app/src/main/assets/models/${{ env.PRIMARY_MODEL_FILE }} ${{ env.PRIMARY_MODEL_URL }}
+          ls -lh android/app/src/main/assets/models/
+
+      - name: Build Bundled Release APK
+        run: bash -c 'JAVA_HOME=/opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.10-7/x64 ./gradlew assembleRelease --no-daemon'
+        working-directory: android
+
+      - name: Rename Bundled APK
+        run: cp android/app/build/outputs/apk/release/app-release.apk lifelog-bundled-release.apk
+
+      - name: Upload Normal APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-release-apk
-          path: android/app/build/outputs/apk/release/app-release.apk
+          name: lifelog-release
+          path: lifelog-release.apk
+
+      - name: Upload Bundled APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lifelog-bundled-release
+          path: lifelog-bundled-release.apk
 
   release:
     needs: build
@@ -82,16 +116,31 @@ jobs:
       contents: write
     
     steps:
-      - name: Download APK
+      - name: Download Normal APK
         uses: actions/download-artifact@v4
         with:
-          name: app-release-apk
+          name: lifelog-release
+
+      - name: Download Bundled APK
+        uses: actions/download-artifact@v4
+        with:
+          name: lifelog-bundled-release
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
-          files: app-release.apk
-          generate_release_notes: false
+          files: |
+            lifelog-release.apk
+            lifelog-bundled-release.apk
+          generate_release_notes: true
           tag_name: v${{ github.run_number }}
+          body: |
+            ## LifeLog Release
+            
+            ### APKs
+            
+            **📱 lifelog-release.apk** - Standard APK (users download AI model on first launch, ~1.5GB smaller)
+            
+            **🤖 lifelog-bundled-release.apk** - Bundled APK (includes Gemma 2 2B AI model, ~2.8GB, no download needed)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

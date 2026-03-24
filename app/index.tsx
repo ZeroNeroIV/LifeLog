@@ -5,6 +5,8 @@ import { getAllSettings, getTodayTotal, getTodayNutritionTotals, getNutritionStr
 import { useTheme, ThemeColors } from '../src/theme';
 import ScreenLayout from '../src/components/ScreenLayout';
 import BentoCard from '../src/components/BentoCard';
+import MoodBentoCard from '../src/components/MoodBentoCard';
+import CaffeineBentoCard from '../src/components/CaffeineBentoCard';
 import { Quote, Flame, Apple, Trophy } from 'lucide-react-native';
 
 const FALLBACK_QUOTES = [
@@ -100,6 +102,10 @@ export default function HomeScreen() {
           <Text style={s.greeting}>Hello, {profileName} 👋</Text>
           <Text style={s.date}>Ready to crush today?</Text>
         </View>
+
+        <MoodBentoCard />
+        
+        <CaffeineBentoCard />
 
         <BentoCard title="Daily Inspiration" icon={Quote} color={colors.primary}>
           <View style={s.quoteBox}>

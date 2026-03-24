@@ -19,6 +19,17 @@ export interface DrinkResult {
   sugar: NutrientValue | null;
 }
 
+export interface FoodNutritionResult {
+  id: string;
+  name: string;
+  brand: string;
+  calories: NutrientValue | null;
+  protein: NutrientValue | null;
+  carbs: NutrientValue | null;
+  fat: NutrientValue | null;
+  fiber: NutrientValue | null;
+}
+
 const FALLBACK_DRINKS: DrinkResult[] = [
   {
     id: "mock-1",
@@ -181,6 +192,47 @@ async function fetchOpenFoodFacts(query: string): Promise<DrinkResult[]> {
     })
     .filter((p) => p.name);
 }
+
+/**
+ * USDA FoodData Central - General Food Nutrition
+ * Returns calories, protein, carbs, fat, fiber for general foods
+ */
+export const searchFoodNutrition = async (query: string): Promise<FoodNutritionResult[]> => {
+  if (!query || query.length < 2) return [];
+
+  try {
+    const res = await fetch(
+      `https://api.nal.usda.gov/fdc/v1/foods/search?query=${encodeURIComponent(query)}&api_key=${USDA_DEMO_KEY}&pageSize=5&dataType=Foundation,SR%20Legacy`,
+    );
+    if (!res.ok) throw new Error("USDA API Error");
+
+    const data: USDAResponse = await res.json();
+    if (!data.foods || data.foods.length === 0) return [];
+
+    return data.foods.map((f) => {
+      const getNutrient = (nameSnippet: string): NutrientValue | null => {
+        const n = f.foodNutrients.find((n) =>
+          n.nutrientName.toLowerCase().includes(nameSnippet.toLowerCase()),
+        );
+        return n ? { value: n.value, unit: n.unitName.toLowerCase() } : null;
+      };
+
+      return {
+        id: `usda-${f.fdcId}`,
+        name: f.description,
+        brand: f.brandOwner || "",
+        calories: getNutrient("energy") || getNutrient("calories"),
+        protein: getNutrient("protein"),
+        carbs: getNutrient("carbohydrate"),
+        fat: getNutrient("total lipid"),
+        fiber: getNutrient("fiber"),
+      };
+    });
+  } catch (err) {
+    console.warn("[Food Nutrition API Failed]", (err as Error).message);
+    return [];
+  }
+};
 
 /**
  * Orchestrator fetching function. Combines all database sources into a bulletproof pipeline.
