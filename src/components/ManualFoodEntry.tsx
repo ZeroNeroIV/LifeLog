@@ -8,6 +8,7 @@ import { useTheme, ThemeColors } from '../theme';
 import { searchDrinks, DrinkResult } from '../services/nutritionApi';
 import { createMeal, addFoodToMeal, MealType } from '../db';
 import * as Haptics from 'expo-haptics';
+import { createInputHandler, filterNoEmoji } from '../utils/validation';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 const MAX_TRANSLATE_Y = -SCREEN_HEIGHT * 0.8;
@@ -221,7 +222,7 @@ export default function ManualFoodEntry({ visible, onClose, onFoodAdded, onRepor
                 <TextInput
                   style={s.searchInput}
                   value={query}
-                  onChangeText={setQuery}
+                  onChangeText={(t) => setQuery(filterNoEmoji(t))}
                   placeholder="Search foods..."
                   placeholderTextColor={colors.textDim}
                   autoFocus
@@ -260,19 +261,19 @@ export default function ManualFoodEntry({ visible, onClose, onFoodAdded, onRepor
               <View style={s.macroInputs}>
                 <View style={s.macroInput}>
                   <Text style={s.inputLabel}>Calories</Text>
-                  <TextInput style={s.smallInput} value={customCalories} onChangeText={setCustomCalories} keyboardType="numeric" placeholder="0" placeholderTextColor={colors.textDim} />
+                  <TextInput style={s.smallInput} value={customCalories} onChangeText={createInputHandler('decimal', setCustomCalories)} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={colors.textDim} />
                 </View>
                 <View style={s.macroInput}>
                   <Text style={s.inputLabel}>Protein (g)</Text>
-                  <TextInput style={s.smallInput} value={customProtein} onChangeText={setCustomProtein} keyboardType="numeric" placeholder="0" placeholderTextColor={colors.textDim} />
+                  <TextInput style={s.smallInput} value={customProtein} onChangeText={createInputHandler('decimal', setCustomProtein)} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={colors.textDim} />
                 </View>
                 <View style={s.macroInput}>
                   <Text style={s.inputLabel}>Carbs (g)</Text>
-                  <TextInput style={s.smallInput} value={customCarbs} onChangeText={setCustomCarbs} keyboardType="numeric" placeholder="0" placeholderTextColor={colors.textDim} />
+                  <TextInput style={s.smallInput} value={customCarbs} onChangeText={createInputHandler('decimal', setCustomCarbs)} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={colors.textDim} />
                 </View>
                 <View style={s.macroInput}>
                   <Text style={s.inputLabel}>Fat (g)</Text>
-                  <TextInput style={s.smallInput} value={customFat} onChangeText={setCustomFat} keyboardType="numeric" placeholder="0" placeholderTextColor={colors.textDim} />
+                  <TextInput style={s.smallInput} value={customFat} onChangeText={createInputHandler('decimal', setCustomFat)} keyboardType="decimal-pad" placeholder="0" placeholderTextColor={colors.textDim} />
                 </View>
               </View>
 
@@ -304,8 +305,8 @@ export default function ManualFoodEntry({ visible, onClose, onFoodAdded, onRepor
                 <TextInput
                   style={s.quantityInput}
                   value={quantity}
-                  onChangeText={setQuantity}
-                  keyboardType="numeric"
+                  onChangeText={createInputHandler('decimal', setQuantity)}
+                  keyboardType="decimal-pad"
                   selectTextOnFocus
                 />
               </View>

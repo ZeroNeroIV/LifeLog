@@ -6,6 +6,7 @@ import BentoCard from './BentoCard';
 import { searchDrinks, DrinkResult } from '../services/nutritionApi';
 import { addLog } from '../db';
 import { useTheme, ThemeColors } from '../theme';
+import { createInputHandler, filterNoEmoji } from '../utils/validation';
 
 const COMMON_DRINKS = ['Espresso', 'Filter Coffee', 'Green Tea', 'Orange Juice', 'Cola Soda', 'Energy Drink'];
 
@@ -124,13 +125,13 @@ export default function DrinksBentoCard() {
               <View style={{flex: 1}}>
                 <View style={s.inputWrapper}>
                   <Search size={20} color={colors.textDim} />
-                  <TextInput 
-                    style={s.input} 
+                  <TextInput
+                    style={s.input}
                     autoFocus
-                    placeholder="e.g. Matcha Latte" 
-                    placeholderTextColor={colors.textDim} 
+                    placeholder="e.g. Matcha Latte"
+                    placeholderTextColor={colors.textDim}
                     value={query}
-                    onChangeText={setQuery}
+                    onChangeText={(t) => setQuery(filterNoEmoji(t))}
                   />
                   {loading && <ActivityIndicator color={colors.accent1} size="small" style={{marginLeft: 12}} />}
                 </View>
@@ -162,17 +163,17 @@ export default function DrinksBentoCard() {
                  <Text style={[s.selectedName, { color: colors.accent1 }]}>{selectedDrink.name}</Text>
                  <Text style={s.volumePrompt}>How much did you drink?</Text>
                  
-                 <View style={s.volumeBox}>
-                   <TextInput 
-                     style={s.volumeInput} 
-                     keyboardType="numeric" 
-                     value={volume} 
-                     onChangeText={setVolume} 
-                     autoFocus
-                     selectTextOnFocus
-                   />
-                   <Text style={s.volumeUnit}>mL</Text>
-                 </View>
+                  <View style={s.volumeBox}>
+                    <TextInput
+                      style={s.volumeInput}
+                      keyboardType="decimal-pad"
+                      value={volume}
+                      onChangeText={createInputHandler('decimal', setVolume)}
+                      autoFocus
+                      selectTextOnFocus
+                    />
+                    <Text style={s.volumeUnit}>mL</Text>
+                  </View>
 
                  <View style={s.previewCard}>
                     <Text style={s.previewTitle}>Estimated Intake</Text>

@@ -5,6 +5,7 @@ import * as Haptics from 'expo-haptics';
 import BentoCard from './BentoCard';
 import { getTodayTotal, addLog, LogType } from '../db';
 import { useTheme, ThemeColors } from '../theme';
+import { createInputHandler } from '../utils/validation';
 
 interface MetricBentoCardProps {
   title: string;
@@ -91,9 +92,9 @@ export default function MetricBentoCard({ title, type, icon, color, unit, fav1, 
               style={s.input}
               placeholder={`Amount in ${unit}`}
               placeholderTextColor="#767575"
-              keyboardType="numeric"
+              keyboardType="decimal-pad"
               value={customValue}
-              onChangeText={setCustomValue}
+              onChangeText={createInputHandler('decimal', setCustomValue)}
               autoFocus
             />
 

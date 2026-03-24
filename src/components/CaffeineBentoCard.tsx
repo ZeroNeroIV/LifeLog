@@ -7,6 +7,7 @@ import { BarChart } from 'react-native-gifted-charts';
 import { getTodayTotal, getWeeklyData, addLog, getAllSettings } from '../db';
 import BentoCard from './BentoCard';
 import { useTheme, ThemeColors } from '../theme';
+import { createInputHandler } from '../utils/validation';
 
 const CAFFEINE_LIMIT = 400; // FDA recommended max
 
@@ -180,9 +181,9 @@ export default function CaffeineBentoCard() {
               style={s.input}
               placeholder="Amount in mg"
               placeholderTextColor={colors.textDim}
-              keyboardType="numeric"
+              keyboardType="decimal-pad"
               value={customValue}
-              onChangeText={setCustomValue}
+              onChangeText={createInputHandler('decimal', setCustomValue)}
               autoFocus
             />
 

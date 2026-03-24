@@ -6,6 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { useTheme, ThemeColors } from '../theme';
 import { createFoodReport } from '../db';
 import * as Haptics from 'expo-haptics';
+import { filterNoEmoji } from '../utils/validation';
 
 interface FoodReportModalProps {
   visible: boolean;
@@ -122,16 +123,17 @@ export default function FoodReportModal({ visible, onClose, initialName = '' }: 
             <TextInput
               style={s.input}
               value={name}
-              onChangeText={setName}
+              onChangeText={(t) => setName(filterNoEmoji(t))}
               placeholder="e.g., Mom's homemade lasagna"
               placeholderTextColor={colors.textDim}
+              autoCapitalize="words"
             />
 
             <Text style={s.label}>Ingredients (optional)</Text>
             <TextInput
               style={[s.input, s.textArea]}
               value={ingredients}
-              onChangeText={setIngredients}
+              onChangeText={(t) => setIngredients(filterNoEmoji(t))}
               placeholder="List main ingredients if known..."
               placeholderTextColor={colors.textDim}
               multiline
@@ -142,7 +144,7 @@ export default function FoodReportModal({ visible, onClose, initialName = '' }: 
             <TextInput
               style={[s.input, s.textArea]}
               value={notes}
-              onChangeText={setNotes}
+              onChangeText={(t) => setNotes(filterNoEmoji(t))}
               placeholder="Any other details about this food..."
               placeholderTextColor={colors.textDim}
               multiline

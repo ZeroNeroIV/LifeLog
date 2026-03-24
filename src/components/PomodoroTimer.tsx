@@ -8,6 +8,7 @@ import { updatePomodoroNotification, clearPomodoroNotification } from '../notifi
 import BentoCard from './BentoCard';
 import TooltipButton from './TooltipButton';
 import { useTheme, ThemeColors } from '../theme';
+import { createInputHandler } from '../utils/validation';
 
 interface PomodoroProfile {
   id: string;
@@ -454,27 +455,27 @@ export default function PomodoroTimer({ onSessionComplete }: PomodoroTimerProps)
             {isAddingNew ? (
               <ScrollView showsVerticalScrollIndicator={false}>
                 <Text style={s.label}>Profile Name</Text>
-                <TextInput style={s.input} value={editorForm.name} onChangeText={t => setEditorForm({...editorForm, name: t})} placeholder="e.g. Deep Work" placeholderTextColor={colors.textDim} />
-                
+                <TextInput style={s.input} value={editorForm.name} onChangeText={createInputHandler('name', t => setEditorForm({...editorForm, name: t}))} placeholder="e.g. Deep Work" placeholderTextColor={colors.textDim} autoCapitalize="words" />
+
                 <View style={s.row}>
                   <View style={{ flex: 1 }}>
                     <Text style={s.label}>Work (min)</Text>
-                    <TextInput style={s.input} keyboardType="decimal-pad" value={editorForm.work} onChangeText={t => setEditorForm({...editorForm, work: t})} />
+                    <TextInput style={s.input} keyboardType="decimal-pad" value={editorForm.work} onChangeText={createInputHandler('decimal', t => setEditorForm({...editorForm, work: t}))} />
                   </View>
                   <View style={{ flex: 1 }}>
                      <Text style={s.label}>Short Break</Text>
-                     <TextInput style={s.input} keyboardType="decimal-pad" value={editorForm.shortBreak} onChangeText={t => setEditorForm({...editorForm, shortBreak: t})} />
+                     <TextInput style={s.input} keyboardType="decimal-pad" value={editorForm.shortBreak} onChangeText={createInputHandler('decimal', t => setEditorForm({...editorForm, shortBreak: t}))} />
                   </View>
                 </View>
 
                 <View style={s.row}>
                   <View style={{ flex: 1 }}>
                     <Text style={s.label}>Long Break</Text>
-                    <TextInput style={s.input} keyboardType="decimal-pad" value={editorForm.longBreak} onChangeText={t => setEditorForm({...editorForm, longBreak: t})} />
+                    <TextInput style={s.input} keyboardType="decimal-pad" value={editorForm.longBreak} onChangeText={createInputHandler('decimal', t => setEditorForm({...editorForm, longBreak: t}))} />
                   </View>
                   <View style={{ flex: 1 }}>
                      <Text style={s.label}>Cycles</Text>
-                     <TextInput style={s.input} keyboardType="numeric" value={editorForm.cycles} onChangeText={t => setEditorForm({...editorForm, cycles: t})} />
+                     <TextInput style={s.input} keyboardType="number-pad" value={editorForm.cycles} onChangeText={createInputHandler('integer', t => setEditorForm({...editorForm, cycles: t}))} />
                   </View>
                 </View>
 

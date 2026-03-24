@@ -7,6 +7,7 @@ import { forceTestMoodCheck, scheduleNextMoodUnlockNotification } from '../src/n
 import { getAllSettings, updateSetting, clearAllLogs, getDB } from '../src/db';
 import * as Haptics from 'expo-haptics';
 import { useTheme, ThemeColors } from '../src/theme';
+import { createInputHandler, validateEmail } from '../src/utils/validation';
 
 export default function SettingsScreen() {
   const { colors, isDark, toggleTheme } = useTheme();
@@ -163,33 +164,36 @@ export default function SettingsScreen() {
           <BentoCard title="Profile" subtitle="Personal Identity" icon={User} color={colors.accent2} style={{marginBottom: 16}}>
               <View style={s.menuBox}>
                   <Text style={s.label}>Full Name</Text>
-                  <TextInput 
-                    style={s.input} 
+                  <TextInput
+                    style={s.input}
                     placeholder="e.g. John Doe"
                     placeholderTextColor={colors.textDim}
-                    value={settings.profile_fullname} 
-                    onChangeText={(t) => setSettings({...settings, profile_fullname: t})} 
+                    value={settings.profile_fullname}
+                    onChangeText={createInputHandler('name', (t) => setSettings({...settings, profile_fullname: t}))}
+                    autoCapitalize="words"
                   />
 
                   <Text style={s.label}>Username</Text>
-                  <TextInput 
-                    style={s.input} 
+                  <TextInput
+                    style={s.input}
                     autoCapitalize="none"
+                    autoCorrect={false}
                     placeholder="e.g. johndoe99"
                     placeholderTextColor={colors.textDim}
-                    value={settings.profile_username} 
-                    onChangeText={(t) => setSettings({...settings, profile_username: t})} 
+                    value={settings.profile_username}
+                    onChangeText={createInputHandler('username', (t) => setSettings({...settings, profile_username: t}))}
                   />
 
                   <Text style={s.label}>Email Address</Text>
-                  <TextInput 
-                    style={s.input} 
+                  <TextInput
+                    style={s.input}
                     keyboardType="email-address"
                     autoCapitalize="none"
+                    autoCorrect={false}
                     placeholder="e.g. john@example.com"
                     placeholderTextColor={colors.textDim}
-                    value={settings.profile_email} 
-                    onChangeText={(t) => setSettings({...settings, profile_email: t})} 
+                    value={settings.profile_email}
+                    onChangeText={createInputHandler('email', (t) => setSettings({...settings, profile_email: t}))}
                   />
 
                   <TouchableOpacity style={s.saveBtn} onPress={saveSettings}>
@@ -218,25 +222,25 @@ export default function SettingsScreen() {
                   <View style={s.row}>
                     <View style={s.halfInput}>
                       <Text style={s.label}>Calories</Text>
-                      <TextInput style={s.input} keyboardType="numeric" value={settings.nutrition_calorie_goal} onChangeText={(t) => setSettings({...settings, nutrition_calorie_goal: t})} />
+                      <TextInput style={s.input} keyboardType="decimal-pad" value={settings.nutrition_calorie_goal} onChangeText={createInputHandler('decimal', (t) => setSettings({...settings, nutrition_calorie_goal: t}))} />
                     </View>
                     <View style={s.halfInput}>
                       <Text style={s.label}>Protein (g)</Text>
-                      <TextInput style={s.input} keyboardType="numeric" value={settings.nutrition_protein_goal} onChangeText={(t) => setSettings({...settings, nutrition_protein_goal: t})} />
+                      <TextInput style={s.input} keyboardType="decimal-pad" value={settings.nutrition_protein_goal} onChangeText={createInputHandler('decimal', (t) => setSettings({...settings, nutrition_protein_goal: t}))} />
                     </View>
                   </View>
                   <View style={s.row}>
                     <View style={s.halfInput}>
                       <Text style={s.label}>Carbs (g)</Text>
-                      <TextInput style={s.input} keyboardType="numeric" value={settings.nutrition_carbs_goal} onChangeText={(t) => setSettings({...settings, nutrition_carbs_goal: t})} />
+                      <TextInput style={s.input} keyboardType="decimal-pad" value={settings.nutrition_carbs_goal} onChangeText={createInputHandler('decimal', (t) => setSettings({...settings, nutrition_carbs_goal: t}))} />
                     </View>
                     <View style={s.halfInput}>
                       <Text style={s.label}>Fat (g)</Text>
-                      <TextInput style={s.input} keyboardType="numeric" value={settings.nutrition_fat_goal} onChangeText={(t) => setSettings({...settings, nutrition_fat_goal: t})} />
+                      <TextInput style={s.input} keyboardType="decimal-pad" value={settings.nutrition_fat_goal} onChangeText={createInputHandler('decimal', (t) => setSettings({...settings, nutrition_fat_goal: t}))} />
                     </View>
                   </View>
                   <Text style={s.label}>Fiber (g)</Text>
-                  <TextInput style={s.input} keyboardType="numeric" value={settings.nutrition_fiber_goal} onChangeText={(t) => setSettings({...settings, nutrition_fiber_goal: t})} />
+                  <TextInput style={s.input} keyboardType="decimal-pad" value={settings.nutrition_fiber_goal} onChangeText={createInputHandler('decimal', (t) => setSettings({...settings, nutrition_fiber_goal: t}))} />
 
                   <TouchableOpacity style={s.saveBtn} onPress={saveSettings}>
                     <View style={{ marginRight: 8 }}>
@@ -279,19 +283,19 @@ export default function SettingsScreen() {
           <BentoCard title="Preferences" subtitle="Quick Logs" icon={Droplets} color={colors.primary} style={{marginBottom: 16}}>
               <View style={s.menuBox}>
                   <Text style={s.label}>Water Auto-Add 1 (mL)</Text>
-                  <TextInput 
-                    style={s.input} 
-                    keyboardType="numeric" 
-                    value={settings.water_fav1_ml} 
-                    onChangeText={(t) => setSettings({...settings, water_fav1_ml: t})} 
+                  <TextInput
+                    style={s.input}
+                    keyboardType="decimal-pad"
+                    value={settings.water_fav1_ml}
+                    onChangeText={createInputHandler('decimal', (t) => setSettings({...settings, water_fav1_ml: t}))}
                   />
 
                   <Text style={s.label}>Water Auto-Add 2 (mL)</Text>
-                  <TextInput 
-                    style={s.input} 
-                    keyboardType="numeric" 
-                    value={settings.water_fav2_ml} 
-                    onChangeText={(t) => setSettings({...settings, water_fav2_ml: t})} 
+                  <TextInput
+                    style={s.input}
+                    keyboardType="decimal-pad"
+                    value={settings.water_fav2_ml}
+                    onChangeText={createInputHandler('decimal', (t) => setSettings({...settings, water_fav2_ml: t}))}
                   />
 
                   <TouchableOpacity style={s.saveBtn} onPress={saveSettings}>
