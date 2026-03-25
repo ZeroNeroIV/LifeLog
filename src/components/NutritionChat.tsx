@@ -230,14 +230,24 @@ export default function NutritionChat({ modelReady, onFoodLogged }: NutritionCha
     }, RESPONSE_TIMEOUT);
 
     try {
+      // Track streaming response separately in case response.text is empty
+      let streamedText = '';
+      
       const response = await processMessage(userMsg.content, (token) => {
         setIsTyping(false);
-        setStreamingText(prev => prev + token);
+        streamedText += token;
+        setStreamingText(streamedText);
       });
 
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
 
-      const assistantMsg: ChatMessage = { id: (Date.now() + 1).toString(), role: 'assistant', content: response.text };
+      // Use streamed text as fallback if response.text is empty
+      const finalText = (response.text || streamedText || '').trim();
+      if (!finalText) {
+        throw new Error('No response from AI model');
+      }
+      
+      const assistantMsg: ChatMessage = { id: (Date.now() + 1).toString(), role: 'assistant', content: finalText };
       setMessages(prev => [...prev, assistantMsg]);
       setStreamingText('');
       setIsTyping(false);
