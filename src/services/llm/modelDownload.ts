@@ -74,26 +74,31 @@ export const formatBytes = (bytes: number): string => {
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 const checkBundledModel = async (): Promise<{ path: string; type: 'primary' | 'fallback' } | null> => {
-  for (const { filename, type } of BUNDLED_MODELS) {
-    try {
-      const bundledFile = new File(Paths.bundle, 'assets', 'models', filename);
-      if (bundledFile.exists) {
-        console.log('[Model] Found bundled model:', filename);
-        return { path: bundledFile.uri, type };
-      }
-    } catch (e) {
-      // Continue checking next model
-    }
-  }
-  return null;
+  // When built with ./scripts/build-with-model.sh, models are bundled in the APK at:
+  // assets/models/gemma-2-2b-q4-small.gguf (primary)
+  //
+  // In production builds, these are accessible via asset:/// URIs
+  // which llama.rn can read when is_model_asset: true is passed
+  
+  console.log('[Model] Checking for bundled models in APK...');
+  
+  // Return the primary bundled model path - the APK contains it at assets/models/
+  // We use asset:/// URI which works with is_model_asset: true in llama.rn
+  return { 
+    path: 'asset:///assets/models/gemma-2-2b-q4-small.gguf', 
+    type: 'primary' as const 
+  };
 };
 
 export const getModelInfo = async (): Promise<ModelInfo> => {
+  console.log('[Model] getModelInfo called');
   const isDownloaded = (await getSetting("llm_model_downloaded")) === "true";
   const path = await getSetting("llm_model_path");
+  console.log('[Model] isDownloaded:', isDownloaded, 'path:', path);
 
   if (isDownloaded && path) {
     const file = new File(path);
+    console.log('[Model] Checking saved path:', file.uri, 'exists:', file.exists);
     if (file.exists) {
       const size = file.size;
       return {
@@ -105,10 +110,12 @@ export const getModelInfo = async (): Promise<ModelInfo> => {
         sizeBytes: size,
       };
     }
+    console.log('[Model] Saved path no longer exists, resetting');
     await updateSetting("llm_model_downloaded", "false");
     await updateSetting("llm_model_path", "");
   }
 
+  console.log('[Model] Checking for bundled model...');
   const bundledPath = await checkBundledModel();
   if (bundledPath) {
     await updateSetting("llm_model_downloaded", "true");
