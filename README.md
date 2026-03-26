@@ -1,53 +1,147 @@
 <div align="center">
-  <h1>🧬 Life-Log</h1>
-  <p><strong>An ultra-fast, offline-first performance tracker built for deep focus, diet mapping, and emotional benchmarking.</strong></p>
+  <img src="https://raw.githubusercontent.com/ZeroNeroIV/LifeLog/main/assets/LogoIcon.png" width="120" alt="Life-Log Logo" />
+  <h1>Life-Log</h1>
+  <p><strong>Your personal offline-first lifestyle tracker</strong></p>
+  
+  <p>
+    <img src="https://img.shields.io/badge/Expo-SDK%2055-000020?style=flat&logo=expo" alt="Expo SDK" />
+    <img src="https://img.shields.io/badge/React%20Native-0.83.2-61DAFB?style=flat&logo=react" alt="React Native" />
+    <img src="https://img.shields.io/badge/Offline-SQLite-green?style=flat" alt="SQLite" />
+    <img src="https://img.shields.io/badge/LLM-Llama.rn-orange?style=flat" alt="Local LLM" />
+  </p>
 </div>
 
-Life-Log is a highly opinionated, zero-telemetry React Native application designed for total lifestyle oversight. It completely eliminates cloud latency by caching your entire multi-vector database securely on your device, leveraging pure SQLite architectures and deep Android OS integrations to map everything from your hourly Pomodoro focus sessions down to specific micro-nutritional ingestion variables seamlessly.
+Life-Log is a privacy-first, completely offline React Native application for tracking every aspect of your daily life — from deep focus sessions to nutritional intake, mood patterns, and hydration. No cloud, no telemetry, no dependencies on external services.
 
-## ✨ Core Architecture & Features
+## ✨ Features
 
-- **⚡ Offline-First SQLite Engine**: Every metric (Water, Caffeine, Sugar, Vitamin C, Focus Time, Mood) maps instantly into a unified `logs` table driven by `expo-sqlite`, ensuring O(1) multi-metric insertions with exactly zero load screens. 
-- **🍅 Lock-Screen Contoured Pomodoro**: A fully customizable focus interval timer that directly hijacks the Native Android Notification buffer. It pushes silent lock-screen widgets that dynamically track time and offer Native `Pause`/`Stop` payload intercepts securely from outside the app container.
-- **🥑 Cascading Nutrition APIs**: Type any drink or food into the Live Search API and Life-Log instantly scrapes the **USDA FoodData Central** governmental database, seamlessly falling back onto Open Food Facts to automatically decouple your drinks into raw Vitamin C, Sugar, and Water vectors.
-- **🌸 Time-Locked Mood Tracking**: A beautifully sculpted 5-scalar vibration tracker that physically paralyzes its own UI for exactly 1 hour post-submission, handing a perfect 60-minute time-bomb trigger directly to the Android OS to securely notify you when your next emotional log is available.
-- **📊 Adaptive Performance Charts**: An instantly reactive Dashboard natively hooking into React Navigation Tab `useFocusEffect` lifecycles to physically re-query your schema on-the-fly and repaint beautiful SVG `react-native-gifted-charts` for every single daily metric simultaneously when the page regains focus.
-- **🌙 Dynamic View Contexts**: Seamlessly toggles pure Dark / Light modes at the root level using a custom `ThemeProvider` injecting semantic alignment tokens dynamically across all components.
+### 🏠 Home Dashboard
+- **Daily motivation** with curated quotes (or fallback when offline)
+- **Quick stats overview** — today's focus time, nutrition progress, mood, caffeine
+- **Streak tracking** for consistent nutrition logging
 
-## 🚀 Installation & Build
+### 📊 Performance Analytics
+- Beautiful **interactive charts** for all your metrics:
+  - Hydration trends (water intake)
+  - Caffeine intake monitoring
+  - Vitamin C levels
+  - Sugar tracking
+  - Emotional state over time
 
-Life-Log relies on cutting-edge Expo SDK 55 deep OS bridging mechanisms, meaning you **cannot** run this via the standard `Expo Go` simulator. You must compile the Native dependencies physically onto a device.
+### 🍎 Nutrition Tracking
+- **AI-powered nutrition chat** using a local LLM (llama.rn)
+- **Food search** via USDA FoodData Central and Open Food Facts APIs
+- **Quick-add buttons** for common foods and drinks
+- **Meal history** with detailed macro breakdowns
+- **Manual food entry** with custom portion sizes
+- **Calorie & macro goals** (protein, carbs, fat, fiber)
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/yourusername/life-log.git
-   cd life-log
-   ```
+### 🍅 Focus Timer
+- **Pomodoro timer** with customizable work/break intervals
+- **Multiple profiles** for different focus styles
+- **Local notifications** to keep you on track
 
-2. **Install dependencies:**
-   *(Bun is highly recommended for massive speed gains)*
-   ```bash
-   bun install
-   ```
+### ⚙️ Settings & Customization
+- **Profile management** (name, username, email)
+- **Dark/Light theme** toggle
+- **Custom nutrition goals**
+- **Water quick-add presets**
+- **Data management** — clear metrics, meals, or all data
 
-3. **Compile the Native Application (Android):**
-   ```bash
-   bunx expo run:android
-   ```
-   *(Ensure your physical Android device is connected via USB debugging or your local simulator is actively booted).*
+### 🌐 Privacy First
+- **100% offline** — all data stays on your device
+- **Zero telemetry** — no analytics, no tracking
+- **SQLite database** — fast, reliable local storage
 
-## 🛠️ Stack
+## 🚀 Getting Started
 
-- **Framework**: React Native / Expo (SDK 55)
-- **Database**: `expo-sqlite`
-- **Navigation**: Expo Router v3 (Tabs based)
-- **Deep OS Links**: `expo-notifications`, `expo-haptics`, `expo-audio`
-- **Visualization**: `react-native-gifted-charts`
-- **Iconography**: `lucide-react-native`
+### Prerequisites
+- **Node.js** (LTS recommended)
+- **Bun** (optional, for faster installs)
+- **Android SDK** (for building Android APK)
+- A physical Android device or emulator
 
-## 🛡️ Privacy by Design
+### Installation
 
-Life-Log features exactly **zero centralized telemetry**. Your mood scalars, your focus intervals, and your dietary consumption graphs never leave your device. Every single metric is locked physically into the internal hardware storage mapped to the device's specific local-time UNIX epoch constraints. 
+```bash
+# Clone the repository
+git clone https://github.com/ZeroNeroIV/LifeLog.git
+cd LifeLog
+
+# Install dependencies
+bun install    # recommended
+# or
+npm install
+
+# Run on Android (requires device/emulator connected)
+bunx expo run:android
+```
+
+### Building APK
+
+```bash
+# Generate native Android project
+bunx expo prebuild --platform android
+
+# Build debug APK
+cd android && ./gradlew assembleDebug
+```
+
+The APK will be at `android/app/build/outputs/apk/debug/`.
+
+## 📱 App Screens
+
+| Tab | Description |
+|-----|-------------|
+| **Home** | Dashboard with daily summary, mood, caffeine, nutrition at-a-glance |
+| **Performance** | Historical charts for all tracked metrics |
+| **Nutrition** | Food logging, AI chat, meal history |
+| **Focus** | Pomodoro timer for deep work sessions |
+| **Settings** | Profile, theme, goals, data management |
+
+## 🛠️ Tech Stack
+
+- **Framework**: React Native with Expo SDK 55
+- **Language**: TypeScript
+- **Navigation**: Expo Router v3 (file-based routing)
+- **Database**: expo-sqlite (local SQLite)
+- **AI**: llama.rn (offline local LLM)
+- **Charts**: react-native-gifted-charts
+- **Icons**: lucide-react-native
+- **Notifications**: expo-notifications
+- **Haptics**: expo-haptics
+
+## 📁 Project Structure
+
+```
+LifeLog/
+├── app/                    # Expo Router screens
+│   ├── _layout.tsx        # Root layout with tabs
+│   ├── index.tsx          # Home dashboard
+│   ├── performance.tsx    # Analytics charts
+│   ├── log.tsx           # Nutrition tracking
+│   ├── focus.tsx         # Pomodoro timer
+│   └── settings.tsx      # App settings
+├── src/
+│   ├── components/       # Reusable UI components
+│   ├── services/         # LLM, food API, offline DB
+│   ├── db.ts             # SQLite database layer
+│   ├── notifications.ts  # Push notification handlers
+│   ├── theme.tsx         # Theme provider
+│   └── utils/            # Validation utilities
+├── assets/               # Images, icons, splash
+├── data/                 # USDA & Open Food Facts data
+└── android/              # Native Android project
+```
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request or open an issue.
+
+## 📄 License
+
+MIT License — see LICENSE file for details.
 
 ---
-*Built with aggressive local-first principles by ZeroNeroIV (Aka Alameen Sabbah).*
+
+*Built with 💜 by [ZeroNeroIV](https://github.com/ZeroNeroIV)*
