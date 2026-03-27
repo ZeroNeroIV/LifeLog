@@ -74,17 +74,44 @@ export const formatBytes = (bytes: number): string => {
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 const checkBundledModel = async (): Promise<{ path: string; type: 'primary' | 'fallback' } | null> => {
-  // When the APK is built with ./scripts/build-with-model.sh, the model is bundled at:
-  // assets/models/gemma-2-2b-q4-small.gguf
-  //
-  // We can't easily verify the file exists using File API because it's inside the APK.
-  // But we know the build script puts it there, so we trust the bundle contains it.
-  // The model path will be passed to llama.rn which reads directly from assets.
+  // The model file is bundled in the APK at assets/models/gemma-2-2b-q4-small.gguf
+  // When the app is installed, Android unpacks assets to the app's internal storage
+  // We need to find where it ended up
   
-  const bundledPath = 'asset:///assets/models/gemma-2-2b-q4-small.gguf';
-  console.log('[Model] Using bundled model path:', bundledPath);
+  const filename = 'gemma-2-2b-q4-small.gguf';
   
-  return { path: bundledPath, type: 'primary' };
+  // Common locations where Android unpacks APK assets
+  // The model is ~1.6GB so we can identify it by size
+  const searchLocations = [
+    // Expo/React Native asset directory
+    { path: `.expo/${filename}`, base: Paths.document },
+    { path: `.expo/${filename}`, base: Paths.cache },
+    // Direct files directory
+    { path: filename, base: Paths.document },
+    { path: filename, base: Paths.cache },
+    { path: `files/${filename}`, base: Paths.document },
+  ];
+  
+  console.log('[Model] Searching for bundled model...');
+  
+  for (const loc of searchLocations) {
+    try {
+      const fullPath = loc.base + '/' + loc.path;
+      const file = new File(fullPath);
+      console.log('[Model] Checking:', file.uri, 'exists:', file.exists, 'size:', file.exists ? file.size : 0);
+      
+      if (file.exists && file.size > 1_000_000_000) {
+        console.log('[Model] Found bundled model at:', file.uri, 'size:', file.size);
+        return { path: file.uri, type: 'primary' };
+      }
+    } catch (e) {
+      console.log('[Model] Error checking:', loc.path, e);
+    }
+  }
+  
+  // If we can't find it, return null and user will need to download
+  console.log('[Model] Could not find bundled model');
+  return null;
 };
 
 export const getModelInfo = async (): Promise<ModelInfo> => {
