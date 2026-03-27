@@ -73,62 +73,56 @@ export const formatBytes = (bytes: number): string => {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-const copyBundledModelToDocuments = async (): Promise<string | null> => {
-  // Copy bundled model from assets to document directory
-  // This is necessary because llama.rn may not read asset:// URIs correctly
-  const bundledFilename = 'gemma-2-2b-q4-small.gguf';
-  const sourceAssetPath = `asset:///assets/models/${bundledFilename}`;
-  const destFile = new File(MODEL_DIR, bundledFilename);
-  
-  console.log('[Model] Copying bundled model to documents...');
-  console.log('[Model] Source:', sourceAssetPath);
-  console.log('[Model] Dest:', destFile.uri);
-  
-  try {
-    // Check if already copied
-    if (destFile.exists) {
-      const size = destFile.size;
-      console.log('[Model] Model already exists in documents:', size, 'bytes');
-      if (size > 1_000_000_000) { // At least 1GB
-        return destFile.uri;
-      }
-      // File too small, delete and re-copy
-      await destFile.delete();
-    }
-    
-    // Copy from asset to documents using legacy fs
-    const sourceFile = new LegacyFileSystem.Asset(sourceAssetPath);
-    await LegacyFileSystem.copyAsync({
-      from: sourceFile.uri,
-      to: destFile.uri,
-    });
-    
-    console.log('[Model] Model copied successfully to:', destFile.uri);
-    return destFile.uri;
-  } catch (e) {
-    console.error('[Model] Failed to copy bundled model:', e);
-    return null;
-  }
-};
-
 const checkBundledModel = async (): Promise<{ path: string; type: 'primary' | 'fallback' } | null> => {
   // When built with ./scripts/build-with-model.sh, models are bundled in the APK at:
   // assets/models/gemma-2-2b-q4-small.gguf (primary)
   //
-  // We need to copy the model to the document directory because llama.rn
-  // has trouble reading directly from asset:// URIs on Android
+  // On Android, bundled assets can be accessed via multiple methods:
+  // 1. file:///data/user/0/<app>/files/.expo/... (unpacked assets in files dir)
+  // 2. Using expo-file-system's bundle path
   
   console.log('[Model] Checking for bundled models in APK...');
   
-  // Try to copy bundled model to documents and use that path
-  const copiedPath = await copyBundledModelToDocuments();
-  if (copiedPath) {
-    return {
-      path: copiedPath,
-      type: 'primary'
-    };
+  // Try to find the model in the unpacked assets directory
+  // This is where Expo/React Native unpacks bundled assets on Android
+  const bundledFilename = 'gemma-2-2b-q4-small.gguf';
+  
+  // Check multiple possible paths where bundled assets might be
+  const possiblePaths = [
+    new File(Paths.cache, '.expo', 'models', bundledFilename),
+    new File(Paths.document, 'models', bundledFilename),
+    new File(Paths.bundle, 'assets', 'models', bundledFilename),
+  ];
+  
+  for (const file of possiblePaths) {
+    console.log('[Model] Checking path:', file.uri, 'exists:', file.exists);
+    if (file.exists && file.size > 1_000_000_000) {
+      console.log('[Model] Found bundled model at:', file.uri, 'size:', file.size);
+      return { path: file.uri, type: 'primary' };
+    }
   }
   
+  // Fallback: Check the legacy expo-asset path format
+  const legacyPath = `file:///android_asset/models/${bundledFilename}`;
+  const legacyFile = new File(legacyPath);
+  console.log('[Model] Checking legacy path:', legacyFile.uri, 'exists:', legacyFile.exists);
+  if (legacyFile.exists) {
+    return { path: legacyFile.uri, type: 'primary' };
+  }
+  
+  // Last resort: try the document directory with models subfolder
+  // This is where we copy the model if not found in assets
+  try {
+    const docModelPath = new File(Paths.document, 'models', bundledFilename);
+    if (docModelPath.exists && docModelPath.size > 1_000_000_000) {
+      console.log('[Model] Found model in documents:', docModelPath.uri);
+      return { path: docModelPath.uri, type: 'primary' };
+    }
+  } catch (e) {
+    console.log('[Model] Error checking document path:', e);
+  }
+  
+  console.log('[Model] No bundled model found');
   return null;
 };
 
@@ -141,7 +135,7 @@ export const getModelInfo = async (): Promise<ModelInfo> => {
   if (isDownloaded && path) {
     const file = new File(path);
     console.log('[Model] Checking saved path:', file.uri, 'exists:', file.exists);
-    if (file.exists) {
+    if (file.exists && file.size > 1_000_000_000) {
       const size = file.size;
       return {
         isDownloaded: true,
@@ -152,7 +146,7 @@ export const getModelInfo = async (): Promise<ModelInfo> => {
         sizeBytes: size,
       };
     }
-    console.log('[Model] Saved path no longer exists, resetting');
+    console.log('[Model] Saved path invalid, clearing...');
     await updateSetting("llm_model_downloaded", "false");
     await updateSetting("llm_model_path", "");
   }
