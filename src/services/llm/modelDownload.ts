@@ -73,21 +73,63 @@ export const formatBytes = (bytes: number): string => {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
+const copyBundledModelToDocuments = async (): Promise<string | null> => {
+  // Copy bundled model from assets to document directory
+  // This is necessary because llama.rn may not read asset:// URIs correctly
+  const bundledFilename = 'gemma-2-2b-q4-small.gguf';
+  const sourceAssetPath = `asset:///assets/models/${bundledFilename}`;
+  const destFile = new File(MODEL_DIR, bundledFilename);
+  
+  console.log('[Model] Copying bundled model to documents...');
+  console.log('[Model] Source:', sourceAssetPath);
+  console.log('[Model] Dest:', destFile.uri);
+  
+  try {
+    // Check if already copied
+    if (destFile.exists) {
+      const size = destFile.size;
+      console.log('[Model] Model already exists in documents:', size, 'bytes');
+      if (size > 1_000_000_000) { // At least 1GB
+        return destFile.uri;
+      }
+      // File too small, delete and re-copy
+      await destFile.delete();
+    }
+    
+    // Copy from asset to documents using legacy fs
+    const sourceFile = new LegacyFileSystem.Asset(sourceAssetPath);
+    await LegacyFileSystem.copyAsync({
+      from: sourceFile.uri,
+      to: destFile.uri,
+    });
+    
+    console.log('[Model] Model copied successfully to:', destFile.uri);
+    return destFile.uri;
+  } catch (e) {
+    console.error('[Model] Failed to copy bundled model:', e);
+    return null;
+  }
+};
+
 const checkBundledModel = async (): Promise<{ path: string; type: 'primary' | 'fallback' } | null> => {
   // When built with ./scripts/build-with-model.sh, models are bundled in the APK at:
   // assets/models/gemma-2-2b-q4-small.gguf (primary)
   //
-  // In production builds, these are accessible via asset:/// URIs
-  // which llama.rn can read when is_model_asset: true is passed
+  // We need to copy the model to the document directory because llama.rn
+  // has trouble reading directly from asset:// URIs on Android
   
   console.log('[Model] Checking for bundled models in APK...');
   
-  // Return the primary bundled model path - the APK contains it at assets/models/
-  // We use asset:/// URI which works with is_model_asset: true in llama.rn
-  return { 
-    path: 'asset:///assets/models/gemma-2-2b-q4-small.gguf', 
-    type: 'primary' as const 
-  };
+  // Try to copy bundled model to documents and use that path
+  const copiedPath = await copyBundledModelToDocuments();
+  if (copiedPath) {
+    return {
+      path: copiedPath,
+      type: 'primary'
+    };
+  }
+  
+  return null;
 };
 
 export const getModelInfo = async (): Promise<ModelInfo> => {

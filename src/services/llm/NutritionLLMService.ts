@@ -215,11 +215,9 @@ export const initializeLLM = async (): Promise<void> => {
 
   try {
     console.log('[LLM] Initializing llama context...');
-    const isBundled = modelInfo.path?.startsWith('asset://');
-    console.log('[LLM] Model path:', modelInfo.path, 'is bundled:', isBundled);
+    console.log('[LLM] Model path:', modelInfo.path);
     _llamaContext = await initLlama({
       model: modelInfo.path!,
-      is_model_asset: isBundled,
       n_ctx: CONTEXT_SIZE,
       n_threads: 4,
       use_mlock: true,
