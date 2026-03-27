@@ -73,56 +73,43 @@ export const formatBytes = (bytes: number): string => {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
+// Simple flag to detect if we're in a bundled APK
+// When APK is built with ./scripts/build-with-model.sh, the model exists in assets
+const IS_BUNDLED_BUILD = __DEV__ !== true;
+
 const checkBundledModel = async (): Promise<{ path: string; type: 'primary' | 'fallback' } | null> => {
-  // When built with ./scripts/build-with-model.sh, models are bundled in the APK at:
-  // assets/models/gemma-2-2b-q4-small.gguf (primary)
-  //
-  // On Android, bundled assets can be accessed via multiple methods:
-  // 1. file:///data/user/0/<app>/files/.expo/... (unpacked assets in files dir)
-  // 2. Using expo-file-system's bundle path
+  // In production builds (non-dev), trust that the model is bundled
+  // The build script puts the model at assets/models/gemma-2-2b-q4-small.gguf
+  // 
+  // For safety, we check if there's already a model file in documents from previous run
   
-  console.log('[Model] Checking for bundled models in APK...');
+  if (!IS_BUNDLED_BUILD) {
+    console.log('[Model] Dev mode - not a bundled build, skipping bundled model check');
+    return null;
+  }
   
-  // Try to find the model in the unpacked assets directory
-  // This is where Expo/React Native unpacks bundled assets on Android
+  console.log('[Model] Production build detected - checking for bundled model...');
+  
+  // Check if model already exists in documents (from copy or previous run)
   const bundledFilename = 'gemma-2-2b-q4-small.gguf';
+  const docModelPath = new File(MODEL_DIR, bundledFilename);
   
-  // Check multiple possible paths where bundled assets might be
-  const possiblePaths = [
-    new File(Paths.cache, '.expo', 'models', bundledFilename),
-    new File(Paths.document, 'models', bundledFilename),
-    new File(Paths.bundle, 'assets', 'models', bundledFilename),
-  ];
-  
-  for (const file of possiblePaths) {
-    console.log('[Model] Checking path:', file.uri, 'exists:', file.exists);
-    if (file.exists && file.size > 1_000_000_000) {
-      console.log('[Model] Found bundled model at:', file.uri, 'size:', file.size);
-      return { path: file.uri, type: 'primary' };
-    }
+  if (docModelPath.exists && docModelPath.size > 1_000_000_000) {
+    console.log('[Model] Found model in documents:', docModelPath.uri, 'size:', docModelPath.size);
+    return { path: docModelPath.uri, type: 'primary' };
   }
   
-  // Fallback: Check the legacy expo-asset path format
-  const legacyPath = `file:///android_asset/models/${bundledFilename}`;
-  const legacyFile = new File(legacyPath);
-  console.log('[Model] Checking legacy path:', legacyFile.uri, 'exists:', legacyFile.exists);
-  if (legacyFile.exists) {
-    return { path: legacyFile.uri, type: 'primary' };
+  // Try bundle path - where React Native stores bundled assets
+  const bundleModelPath = new File(Paths.bundle, 'assets', 'models', bundledFilename);
+  console.log('[Model] Checking bundle path:', bundleModelPath.uri, 'exists:', bundleModelPath.exists);
+  
+  if (bundleModelPath.exists && bundleModelPath.size > 1_000_000_000) {
+    console.log('[Model] Found bundled model at:', bundleModelPath.uri);
+    return { path: bundleModelPath.uri, type: 'primary' };
   }
   
-  // Last resort: try the document directory with models subfolder
-  // This is where we copy the model if not found in assets
-  try {
-    const docModelPath = new File(Paths.document, 'models', bundledFilename);
-    if (docModelPath.exists && docModelPath.size > 1_000_000_000) {
-      console.log('[Model] Found model in documents:', docModelPath.uri);
-      return { path: docModelPath.uri, type: 'primary' };
-    }
-  } catch (e) {
-    console.log('[Model] Error checking document path:', e);
-  }
-  
-  console.log('[Model] No bundled model found');
+  // Model not found - will need to download (or rebuild with model)
+  console.log('[Model] No bundled model found - will prompt for download');
   return null;
 };
 
