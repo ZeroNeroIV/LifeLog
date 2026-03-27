@@ -73,43 +73,42 @@ export const formatBytes = (bytes: number): string => {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-// Simple flag to detect if we're in a bundled APK
-// When APK is built with ./scripts/build-with-model.sh, the model exists in assets
-const IS_BUNDLED_BUILD = __DEV__ !== true;
+const findModelFile = async (): Promise<File | null> => {
+  // Look for the model file in common locations
+  const filename = 'gemma-2-2b-q4-small.gguf';
+  
+  // In production builds, bundled assets are at:
+  // /data/data/<app>/files/.expo/ or similar paths
+  // We check various locations
+  
+  const searchPaths = [
+    new File(Paths.bundle, 'assets', 'models', filename),
+    new File(Paths.document, 'models', filename),
+    new File(Paths.cache, 'models', filename),
+    // Try direct file access to assets in APK
+    new File('file:///data/user/0/com.lifelog/files/.expo/models/' + filename),
+  ];
+  
+  for (const file of searchPaths) {
+    console.log('[Model] Checking:', file.uri, 'exists:', file.exists);
+    if (file.exists && file.size > 1_000_000_000) {
+      console.log('[Model] Found:', file.uri, file.size);
+      return file;
+    }
+  }
+  
+  return null;
+};
 
 const checkBundledModel = async (): Promise<{ path: string; type: 'primary' | 'fallback' } | null> => {
-  // In production builds (non-dev), trust that the model is bundled
-  // The build script puts the model at assets/models/gemma-2-2b-q4-small.gguf
-  // 
-  // For safety, we check if there's already a model file in documents from previous run
+  console.log('[Model] Checking for bundled model...');
   
-  if (!IS_BUNDLED_BUILD) {
-    console.log('[Model] Dev mode - not a bundled build, skipping bundled model check');
-    return null;
+  const modelFile = await findModelFile();
+  if (modelFile) {
+    return { path: modelFile.uri, type: 'primary' };
   }
   
-  console.log('[Model] Production build detected - checking for bundled model...');
-  
-  // Check if model already exists in documents (from copy or previous run)
-  const bundledFilename = 'gemma-2-2b-q4-small.gguf';
-  const docModelPath = new File(MODEL_DIR, bundledFilename);
-  
-  if (docModelPath.exists && docModelPath.size > 1_000_000_000) {
-    console.log('[Model] Found model in documents:', docModelPath.uri, 'size:', docModelPath.size);
-    return { path: docModelPath.uri, type: 'primary' };
-  }
-  
-  // Try bundle path - where React Native stores bundled assets
-  const bundleModelPath = new File(Paths.bundle, 'assets', 'models', bundledFilename);
-  console.log('[Model] Checking bundle path:', bundleModelPath.uri, 'exists:', bundleModelPath.exists);
-  
-  if (bundleModelPath.exists && bundleModelPath.size > 1_000_000_000) {
-    console.log('[Model] Found bundled model at:', bundleModelPath.uri);
-    return { path: bundleModelPath.uri, type: 'primary' };
-  }
-  
-  // Model not found - will need to download (or rebuild with model)
-  console.log('[Model] No bundled model found - will prompt for download');
+  console.log('[Model] No bundled model found');
   return null;
 };
 
