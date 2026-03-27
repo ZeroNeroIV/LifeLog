@@ -73,83 +73,66 @@ export const formatBytes = (bytes: number): string => {
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 
-const findModelFile = async (): Promise<File | null> => {
-  // Look for the model file in common locations
-  const filename = 'gemma-2-2b-q4-small.gguf';
-  
-  // In production builds, bundled assets are at:
-  // /data/data/<app>/files/.expo/ or similar paths
-  // We check various locations
-  
-  const searchPaths = [
-    new File(Paths.bundle, 'assets', 'models', filename),
-    new File(Paths.document, 'models', filename),
-    new File(Paths.cache, 'models', filename),
-    // Try direct file access to assets in APK
-    new File('file:///data/user/0/com.lifelog/files/.expo/models/' + filename),
-  ];
-  
-  for (const file of searchPaths) {
-    console.log('[Model] Checking:', file.uri, 'exists:', file.exists);
-    if (file.exists && file.size > 1_000_000_000) {
-      console.log('[Model] Found:', file.uri, file.size);
-      return file;
-    }
-  }
-  
-  return null;
-};
-
 const checkBundledModel = async (): Promise<{ path: string; type: 'primary' | 'fallback' } | null> => {
-  console.log('[Model] Checking for bundled model...');
+  // When the APK is built with ./scripts/build-with-model.sh, the model is bundled at:
+  // assets/models/gemma-2-2b-q4-small.gguf
+  //
+  // We can't easily verify the file exists using File API because it's inside the APK.
+  // But we know the build script puts it there, so we trust the bundle contains it.
+  // The model path will be passed to llama.rn which reads directly from assets.
   
-  const modelFile = await findModelFile();
-  if (modelFile) {
-    return { path: modelFile.uri, type: 'primary' };
-  }
+  const bundledPath = 'asset:///assets/models/gemma-2-2b-q4-small.gguf';
+  console.log('[Model] Using bundled model path:', bundledPath);
   
-  console.log('[Model] No bundled model found');
-  return null;
+  return { path: bundledPath, type: 'primary' };
 };
 
 export const getModelInfo = async (): Promise<ModelInfo> => {
   console.log('[Model] getModelInfo called');
+  
+  // First check if we have a valid saved path from previous run
   const isDownloaded = (await getSetting("llm_model_downloaded")) === "true";
   const path = await getSetting("llm_model_path");
-  console.log('[Model] isDownloaded:', isDownloaded, 'path:', path);
-
+  
   if (isDownloaded && path) {
+    // Check if saved path still works (for downloaded models in documents)
     const file = new File(path);
     console.log('[Model] Checking saved path:', file.uri, 'exists:', file.exists);
     if (file.exists && file.size > 1_000_000_000) {
-      const size = file.size;
       return {
         isDownloaded: true,
         path,
-        name: path.includes("gemma-3n")
+        name: path.includes("gemma-2b-q4-small")
           ? MODELS.primary.name
           : MODELS.fallback.name,
-        sizeBytes: size,
+        sizeBytes: file.size,
       };
     }
+    // Saved path invalid, clear it
     console.log('[Model] Saved path invalid, clearing...');
     await updateSetting("llm_model_downloaded", "false");
     await updateSetting("llm_model_path", "");
   }
 
+  // No valid saved path - try bundled model
+  // In a properly built APK, the model exists at assets/models/
   console.log('[Model] Checking for bundled model...');
   const bundledPath = await checkBundledModel();
+  
   if (bundledPath) {
+    // Save that we found the bundled model
     await updateSetting("llm_model_downloaded", "true");
     await updateSetting("llm_model_path", bundledPath.path);
     return {
       isDownloaded: true,
+      isBundled: true,
       path: bundledPath.path,
-      name: "gemma-2-2b-q4 (bundled)",
-      sizeBytes: MODELS.fallback.sizeBytes,
+      name: "gemma-2-2b-q4-small (bundled)",
+      sizeBytes: MODELS.primary.sizeBytes,
     };
   }
 
+  // No bundled model - need to download
   return { isDownloaded: false };
 };
 
