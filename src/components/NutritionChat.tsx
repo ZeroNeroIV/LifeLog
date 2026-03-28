@@ -18,7 +18,7 @@ try {
   console.warn('[Speech] expo-speech-recognition not available');
 }
 
-const RESPONSE_TIMEOUT = 60000;
+const RESPONSE_TIMEOUT = 120_000;
 
 interface ChatMessage {
   id: string;
