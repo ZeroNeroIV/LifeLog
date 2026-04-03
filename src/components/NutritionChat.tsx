@@ -58,6 +58,29 @@ export default function NutritionChat({ modelReady, onFoodLogged }: NutritionCha
     if (modelReady) initChat();
   }, [modelReady]);
 
+  // Reload messages when component becomes visible (e.g., tab switch)
+  useEffect(() => {
+    const loadMessages = async () => {
+      const convId = getCurrentConversationId();
+      if (convId) {
+        try {
+          const existing = await getConversationMessages(convId);
+          setMessages(existing.map((m: ConversationMessage) => ({ 
+            id: m.id.toString(), 
+            role: m.role, 
+            content: m.content 
+          })));
+        } catch (error) {
+          console.error('[NutritionChat] Failed to reload messages:', error);
+        }
+      }
+    };
+    
+    if (modelReady && !isInitializing) {
+      loadMessages();
+    }
+  }, [modelReady, isInitializing]);
+
   useSpeechRecognitionEventSafe('start', () => {
     setIsListening(true);
     setVoiceError(null);

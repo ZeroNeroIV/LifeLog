@@ -35,22 +35,22 @@ interface ModelConfig {
 
 const MODELS: Record<string, ModelConfig> = {
   primary: {
-    name: "gemma-2-2b-q4-small",
-    url: "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_S.gguf",
-    sizeBytes: 1_300_000_000,
-    filename: "gemma-2-2b-q4-small.gguf",
+    name: "gemma-4-E2B-q4-small",
+    url: "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_S.gguf",
+    sizeBytes: 3_380_000_000,
+    filename: "gemma-4-E2B-q4-small.gguf",
   },
   fallback: {
-    name: "gemma-2-2b-q4-medium",
-    url: "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf",
-    sizeBytes: 1_500_000_000,
-    filename: "gemma-2-2b-q4-medium.gguf",
+    name: "gemma-4-E2B-q4-medium",
+    url: "https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf",
+    sizeBytes: 3_460_000_000,
+    filename: "gemma-4-E2B-q4-medium.gguf",
   },
 };
 
 const BUNDLED_MODELS = [
-  { filename: "gemma-2-2b-q4-small.gguf", type: "primary" as const },
-  { filename: "gemma-2-2b-q4-medium.gguf", type: "fallback" as const },
+  { filename: "gemma-4-E2B-q4-small.gguf", type: "primary" as const },
+  { filename: "gemma-4-E2B-q4-medium.gguf", type: "fallback" as const },
 ];
 
 const MODEL_DIR = new Directory(Paths.document, 'models');
@@ -74,11 +74,11 @@ export const formatBytes = (bytes: number): string => {
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 const checkBundledModel = async (): Promise<{ path: string; type: 'primary' | 'fallback' } | null> => {
-  // The model file is bundled in the APK at assets/models/gemma-2-2b-q4-small.gguf
+  // The model file is bundled in the APK at assets/models/gemma-4-E2B-q4-small.gguf
   // When the app is installed, Android unpacks assets to the app's internal storage
   // We need to find where it ended up
   
-  const filename = 'gemma-2-2b-q4-small.gguf';
+  const filename = 'gemma-4-E2B-q4-small.gguf';
   
   // Common locations where Android unpacks APK assets
   // The model is ~1.6GB so we can identify it by size
@@ -129,7 +129,7 @@ export const getModelInfo = async (): Promise<ModelInfo> => {
       return {
         isDownloaded: true,
         path,
-        name: path.includes("gemma-2b-q4-small")
+        name: path.includes("E2B-q4-small")
           ? MODELS.primary.name
           : MODELS.fallback.name,
         sizeBytes: file.size,
@@ -154,7 +154,7 @@ export const getModelInfo = async (): Promise<ModelInfo> => {
       isDownloaded: true,
       isBundled: true,
       path: bundledPath.path,
-      name: "gemma-2-2b-q4-small (bundled)",
+      name: "gemma-4-E2B-q4-small (bundled)",
       sizeBytes: MODELS.primary.sizeBytes,
     };
   }

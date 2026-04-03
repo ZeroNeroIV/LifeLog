@@ -11,10 +11,10 @@
 set -e
 
 # Configuration
-PRIMARY_URL="https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_S.gguf"
-PRIMARY_FILENAME="gemma-2-2b-q4-small.gguf"
-FALLBACK_URL="https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf"
-FALLBACK_FILENAME="gemma-2-2b-q4-medium.gguf"
+PRIMARY_URL="https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_S.gguf"
+PRIMARY_FILENAME="gemma-4-E2B-q4-small.gguf"
+FALLBACK_URL="https://huggingface.co/bartowski/google_gemma-4-E2B-it-GGUF/resolve/main/google_gemma-4-E2B-it-Q4_K_M.gguf"
+FALLBACK_FILENAME="gemma-4-E2B-q4-medium.gguf"
 MODEL_DIR="android/app/src/main/assets/models"
 BUILD_TYPE="release"
 PRIMARY_ONLY=false
@@ -79,11 +79,11 @@ download_model() {
 }
 
 # Download primary model
-download_model "$PRIMARY_URL" "$MODEL_DIR/$PRIMARY_FILENAME" "Primary model (Q4_K_S)" 1300000000 || exit 1
+download_model "$PRIMARY_URL" "$MODEL_DIR/$PRIMARY_FILENAME" "Primary model (Q4_K_S)" 3380000000 || exit 1
 
 # Download fallback model (unless --primary-only)
 if [ "$PRIMARY_ONLY" = false ]; then
-    download_model "$FALLBACK_URL" "$MODEL_DIR/$FALLBACK_FILENAME" "Fallback model (Q4_K_M)" 1500000000 || exit 1
+    download_model "$FALLBACK_URL" "$MODEL_DIR/$FALLBACK_FILENAME" "Fallback model (Q4_K_M)" 3460000000 || exit 1
 fi
 
 echo ""
